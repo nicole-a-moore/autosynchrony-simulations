@@ -7,7 +7,8 @@ simulate_range_shifts <- function(stable_ranges,
                                   d = 0.1, # proportion of offspring dispersing
                                   icp = 0.1, ## intraspecific competition parameter
                                   L = 1500, # number of time steps to simulate
-                                  path # set path
+                                  path = "outputs/data-processed/range-shifts", # set path
+                                  shift_rate = 100/1000
 ) {
   
   print("Starting!")
@@ -40,7 +41,7 @@ simulate_range_shifts <- function(stable_ranges,
   #################################
   
   ## for each replicate
-  all <- for(rep in 1:reps) {
+  all <- foreach(rep = 1:reps) %dopar% {
     
     ## loop through amounts of autocorrelation and synchrony
     p_curr = 1
@@ -63,16 +64,70 @@ simulate_range_shifts <- function(stable_ranges,
         opt = 25
         lattice_E_it[opt,] = Emax
         
-        ## assume that conditions decline sigmoidally away from this optimum in both directions
-        lattice_E_it[1:(opt-1),] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
-        lattice_E_it[(opt+1):nrow,] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
-        #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        # ## assume that conditions decline sigmoidally away from this optimum in both directions
+        # lattice_E_it[1:(opt-1),] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
+        # lattice_E_it[(opt+1):nrow,] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
+        # #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        
+        #### TEST
+        ## try letting growth rate be negative instead of asymptoting at 0 
+        lattice_E_it[1:(opt-1),] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) - 0.25
+        lattice_E_it[(opt+1):nrow,] = Emax*2*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] - 0.25
+        # plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
         
         ## replicate latitudinal gradient L times 
         lattice_E_it_array <- replicate(L, lattice_E_it)
         
         ## create noise time series for each cell during stable conditions, L time steps long
         lattice_ac_it = array(dim = c(nrow,ncol,L))
+        
+        ## shift climate optimum by 0.33 cells per time step
+        lattice_E_it_array <- replicate(1500, lattice_E_it) 
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,1])
+        q = 1
+        new_opt = 0
+        while(q <= L) {
+          ## if optimum is still on grid
+          if(new_opt < nrow-1) {
+            step = floor(shift_rate*q)
+            new_opt = opt + step
+            
+            ## shift optimum by "step"
+            ## shift the optimum climatic conditions on the lattice
+            lattice_E_it_array[new_opt,,q] = Emax
+            ## assume that conditions decline sigmoidally away from this optimum in both directions
+            lattice_E_it_array[1:((new_opt)-1),,q] = Emax*2*rev((1:((new_opt)-1))^s/ 
+                                                                  ((1:((new_opt)-1))^s + h^s)) - 0.25
+            lattice_E_it_array[((new_opt)+1):nrow,,q] = Emax*2*((1:nrow)^s / 
+                                                                  ((1:nrow)^s + h^s))[1:(nrow-(new_opt))] - 0.25
+            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
+          }
+          else if(new_opt == (nrow - 1)) {
+            step = floor(shift_rate*q)
+            new_opt = opt + step
+
+            ## shift the optimum climatic conditions on the lattice
+            lattice_E_it_array[new_opt,,q] = Emax
+            ## assume that conditions decline sigmoidally away from this optimum in both directions
+            lattice_E_it_array[1:(new_opt - 1),,q] = (Emax*2*rev((1:((new_opt)-1))^s/ 
+                                                          ((1:((new_opt)-1))^s + h^s)) - 0.25)
+            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
+          }
+          ## otherwise
+          else {
+            step = floor(shift_rate*q)
+            new_opt = opt + step
+            
+            ## shift optimum by "step"
+            ## assume that conditions decline sigmoidally away from this optimum in both directions
+            lattice_E_it_array[1:nrow,,q] = (Emax*2*rev((1:((new_opt)-1))^s/ 
+                                                                  ((1:((new_opt)-1))^s + h^s)) - 0.25)[1:nrow]
+            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
+          }
+          
+          q = q + 1
+        }
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,1499])
         
         ## generate noise of given synchrony and autocorrelation
         noise <- generate_noise(beta = beta,
@@ -115,10 +170,13 @@ simulate_range_shifts <- function(stable_ranges,
         lattice_r_array = (lattice_E_it_array + lattice_ac_it[,,1:L])*r
         # plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,1])
         
-        ## check that mean r decreases
-        # m = function (x){ mean(lattice_r_array[x,1:ncol,1:L]) }
-        # means = sapply(1:60, FUN = m)
-        # plot(x = 1:60, y = means)
+        ## save environmental array as raster
+        filename =  paste0("outputs/data-processed/env-grids/shift_grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+                           d, "_icp", icp, "_L", L, "_reps", reps, ".tif")
+        writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
+        
+        ## remove unneeded objects from env
+        rm("lattice_r", "lattice_E_it_array", "lattice_ac_it")
         
         ## get initial species range and set as range at t = 1
         lattice_N_it[,,1] = stable_ranges[[rep]]
@@ -126,51 +184,23 @@ simulate_range_shifts <- function(stable_ranges,
         ########################################################################
         ###    run population simulations under shifting climate gradient     ## 
         ########################################################################
-        
-        ## shift climate optimum by 0.33 cells per time step
-        lattice_E_it_array <- replicate(1500, lattice_E_it) 
-        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,1])
-        q = 1
-        new_opt = 0
-        while(q <= L & new_opt < nrow-1) {
-          step = floor((1/3)*q)
-          new_opt = opt + step
-          
-          ## shift optimum by "step"
-          ## shift the optimum climatic conditions on the lattice
-          lattice_E_it_array[new_opt,,q] = Emax
-          ## assume that conditions decline sigmoidally away from this optimum in both directions
-          lattice_E_it_array[1:((new_opt)-1),,q] = Emax*rev((1:((new_opt)-1))^s/ 
-                                                              ((1:((new_opt)-1))^s + h^s))
-          lattice_E_it_array[((new_opt)+1):nrow,,q] = Emax*((1:nrow)^s / 
-                                                              ((1:nrow)^s + h^s))[1:(nrow-(new_opt))]
-          # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
-          
-          q = q + 1
-          
-          ## if the optimum has reached the edge of the sampling bounds
-          if(new_opt == nrow-1) {
-            ## end simulation and set the rest of the env. values to NA 
-            lattice_E_it_array[,,q:L] = NA
-          }
-          
-        }
-        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,100])
-        
         ## run the population simulations
         t = 1 
         all_ranges <- c()
         while(t <= L) {
           
           ## save species range at time t as a data frame:
-          ras <- raster(nrow = nrow, ncols = ncol, xmn = 0, xmx = ncol, ymn = 0, ymx = nrow)
-          values(ras) <- c(t(lattice_N_it[,,t]))
-          pts = as.data.frame(rasterToPoints(ras))
-          pts =rename(pts, "Nt" = "layer")
+          matrix = lattice_N_it[,,t]
+          df <- expand.grid(y = 1:nrow, x = 1:ncol) 
+          pts <- as.data.frame(transform(df, z = matrix[as.matrix(df)]))
+          pts$x = pts$x - 0.5
+          pts$y = 100 - (pts$y - 0.5)
+          pts = rename(pts, "Nt" = "z")
           pts$t = t
           pts$rep = rep
           pts$p = p
           pts$beta = beta
+          pts$shift_rate = shift_rate
           pts$N_global = sum(lattice_N_it[,,t])
           pts$N_ext_local = length(which(lattice_N_it[,,t] == 0))
           
@@ -263,7 +293,7 @@ simulate_range_shifts <- function(stable_ranges,
         
         ## save data frame containing species range data at each time step:
         write.csv(all_ranges, paste0(path, 
-                                     "rep", rep, "_p", p, "_b", beta, "_icp", icp, 
+                                     "/rep", rep, "_p", p, "_b", beta, "_icp", icp, 
                                      "_range-shifts.csv"), 
                   row.names = FALSE)
         
@@ -274,20 +304,5 @@ simulate_range_shifts <- function(stable_ranges,
     beta_curr = 1
 }
 
-  
 
-
-
-
-
-
-  
-
-  
-  
-  
-  
-  
-  
-  
 }

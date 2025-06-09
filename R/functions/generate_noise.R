@@ -5,7 +5,7 @@
 ## when p = 1, all are synchronous 
 ## when p = 0, all are asynchronous
 ## method adapted from Lögdberg & Wennergren and Cuddington & Yodzis
-generate_noise <- function(beta, ## specral exponent, between 0 (low autocorelation) and 1 (high autocorrelation)
+generate_noise <- function(beta, ## spectral exponent, between 0 (low autocorelation) and 1 (high autocorrelation)
                            p, ## synchrony parameter, between 0 (low synchrony) and 1 (high synchrony)
                            n_ts, ## the number of unique time series to create
                            L ## the length of each time series 

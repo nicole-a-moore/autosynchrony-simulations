@@ -1,6 +1,6 @@
 ## function to generate initial species ranges under stable climate conditions 
-generate_stable_ranges <- function(p = 1, # synchrony parameter 
-                                  beta = 0, # autocorrelation parameter (spectral exponent)
+generate_stable_ranges <- function(p, # synchrony parameter 
+                                  beta, # autocorrelation parameter (spectral exponent)
                                   r = 1.2, # maximum intrinsic rate of increase 
                                   K = 100, # mean carrying capacity 
                                   d = 0.1, # proportion of offspring dispersing
@@ -14,6 +14,13 @@ generate_stable_ranges <- function(p = 1, # synchrony parameter
   
   ## read in function to generate time series of noise:
   source("R/functions/generate_noise.R")
+  
+  ## create folder for output 
+  path = paste0(path, "/", "rep", rep, "_p", p, "_b", beta, "_icp", icp, "_d", d, "/")
+  
+  if(!dir.exists(path)) {
+    dir.create(path, recursive = T)
+  }
   
   ######################################################
   ###      set additional simulation parameters       ## 
@@ -33,79 +40,8 @@ generate_stable_ranges <- function(p = 1, # synchrony parameter
   #################################
   
   ## loop through replicates 
-  all <- foreach (rep = 1:reps)  %dopar% {
-    
-    ## cellular lattice of microcosms
-    lattice_N_it = matrix(ncol = ncol, nrow = nrow)
-    lattice_r = matrix(ncol = ncol, nrow = nrow)
-    lattice_E_it = matrix(ncol = ncol, nrow = nrow)
-    
-    ## higher proportion dispersing = less pronounced effect of suitability gradient
-    lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
-    lattice_N_it[1:nrow,1:ncol] <- K/2 ## start with population size = carrying capacity / 2
-    
-    ## position optimum climatic conditions as row 25 on the lattice (Emax)
-    opt = 25
-    lattice_E_it[opt,] = Emax
-    
-    ## assume that conditions decline sigmoidally away from this optimum in both directions
-    lattice_E_it[1:(opt-1),] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
-    lattice_E_it[(opt+1):nrow,] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
-    #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
-    
-    ## replicate latitudinal gradient L times 
-    lattice_E_it_array <- replicate(L, lattice_E_it)
-    
-    ## create noise time series for each cell during stable conditions, L time steps long
-    lattice_ac_it = array(dim = c(nrow,ncol,L))
-    
-    ## generate noise of given synchrony and autocorrelation
-    noise <- generate_noise(beta = beta,
-                            p = p,
-                            n_ts = nrow*ncol, ## number of cells
-                            L = L)
-    
-    ## verify the degree of autocorrelation and synchrony: 
-    ## calculate mean measured spectral exponent for each time series
-    beta_star =  mean(sapply(noise[[2]], cbind))
-    
-    ## measure cross correlation:
-    ## first-difference the time series values
-    ts_all <- data.frame(sapply(noise[[1]], cbind))
-    diffs <- ts_all[2:(nrow(ts_all)-1),] - ts_all[1:(nrow(ts_all)-2),]
-    
-    cors <- c()
-    i=1
-    while(i <= ncol(diffs)) {
-      for(n in ncol(diffs)) {
-        if(n != i) {
-          cors <- append(cors, cor(diffs[,i], diffs[,n], method = 'pearson'))
-        }
-      }
-      i = i + 1
-    }
-    p_star = mean(cors)
-    
-    
-    ## assign noise to each cell in the lattice
-    df <- data.frame(sapply(noise[[1]], cbind))
-    n = 1
-    for(a in 1:nrow) {
-      for(b in 1:ncol) {
-        lattice_ac_it[a,b,1:L] <- df[,n]
-        n = n + 1
-      }
-    }
-    
-    ## let noise affect r for each cell in the lattice
-    lattice_r_array = (lattice_E_it_array + lattice_ac_it[,,1:L])*r
-    # plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,1])
-    
-    ## check that mean r decreases
-    # m = function (x){ mean(lattice_r_array[x,1:ncol,1:L]) }
-    # means = sapply(1:60, FUN = m)
-    # plot(x = 1:60, y = means)
-
+  foreach (rep = 1:reps)  %dopar% {
+ 
     ########################################################################
     ###      run population simulations under stable climate conditions   ## 
     ########################################################################
@@ -114,8 +50,107 @@ generate_stable_ranges <- function(p = 1, # synchrony parameter
     N_ext_local <- 0
     while(t < L) {
       
+      if(t == 1) {
+        
+        ## cellular lattice of microcosms
+        lattice_N_it = matrix(ncol = ncol, nrow = nrow)
+        lattice_r = matrix(ncol = ncol, nrow = nrow)
+        lattice_E_it = matrix(ncol = ncol, nrow = nrow)
+        
+        ## higher proportion dispersing = less pronounced effect of suitability gradient
+        lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
+        lattice_N_it[1:nrow,1:ncol] <- K/2 ## start with population size = carrying capacity / 2
+        
+        ## position optimum climatic conditions as row 25 on the lattice (Emax)
+        opt = 25
+        lattice_E_it[opt,] = Emax
+        
+        ## assume that conditions decline sigmoidally away from this optimum in both directions
+        # lattice_E_it[1:(opt-1),] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
+        # lattice_E_it[(opt+1):nrow,] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
+        #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        
+        #### TEST
+        ## try letting growth rate be negative instead of asympoting at 0 
+        lattice_E_it[1:(opt-1),] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) - 0.25
+        lattice_E_it[(opt+1):nrow,] = Emax*2*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] - 0.25
+        # plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        
+        ## create noise time series for each cell during stable conditions, L time steps long
+        lattice_ac_it = array(dim = c(nrow,ncol,L))
+        
+        ## generate noise of given synchrony and autocorrelation
+        noise <- generate_noise(beta = beta,
+                                p = p,
+                                n_ts = nrow*ncol, ## number of cells
+                                L = L)
+        
+        ## verify the degree of autocorrelation and synchrony: 
+        ## calculate mean measured spectral exponent for each time series
+        beta_star =  mean(sapply(noise[[2]], cbind))
+        
+        ## measure cross correlation:
+        ## first-difference the time series values
+        ts_all <- data.frame(sapply(noise[[1]], cbind))
+        diffs <- ts_all[2:(nrow(ts_all)-1),] - ts_all[1:(nrow(ts_all)-2),]
+        
+        cors <- c()
+        i=1
+        while(i <= ncol(diffs)) {
+          for(n in ncol(diffs)) {
+            if(n != i) {
+              cors <- append(cors, cor(diffs[,i], diffs[,n], method = 'pearson'))
+            }
+          }
+          i = i + 1
+        }
+        p_star = mean(cors)
+        
+        
+        ## assign noise to each cell in the lattice
+        df <- data.frame(sapply(noise[[1]], cbind))
+        n = 1
+        for(a in 1:nrow) {
+          for(b in 1:ncol) {
+            lattice_ac_it[a,b,1:L] <- df[,n]
+            n = n + 1
+          }
+        }
+        
+        lattice_r_array = (replicate(L, lattice_E_it) + lattice_ac_it[,,1:L])*r
+        
+        ## check that mean r decreases
+        # m = function (x){ mean(lattice_r_array[x,1:ncol,1:L]) }
+        # means = sapply(1:60, FUN = m)
+        # plot(x = 1:60, y = means)
+        
+        ## save environmental array as raster
+        filename =  paste0("outputs/data-processed/env-grids/grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+                           d, "_icp", icp, "_L", L, "_reps", reps, ".tif")
+        writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
+      }
+      
+      ## save data frame containing species range data at time step t:
+      matrix = lattice_N_it[,]
+      df <- expand.grid(y = 1:nrow, x = 1:ncol) 
+      pts <- as.data.frame(transform(df, z = matrix[as.matrix(df)]))
+      pts$x = pts$x - 0.5
+      pts$y = 100 - (pts$y - 0.5)
+      pts = rename(pts, "Nt" = "z")
+      pts$t = t
+      pts$rep = rep
+      pts$p = p
+      pts$beta = beta
+      pts$shift_rate = 0
+      pts$N_global = sum(lattice_N_it[,])
+      pts$N_ext_local = length(which(lattice_N_it[,] == 0))
+      
+      write.csv(pts, paste0(path, "/rep", rep, "_p", p, "_b", beta, "_icp", icp, "_d", d, "_t", t, 
+                                   "_stable-ranges.csv"), 
+                row.names = FALSE)
+      
       ## get grid of growth rates at time t
-      lattice_r_curr <- lattice_r_array[,,t]
+      lattice_r_curr <- lattice_E_it + lattice_ac_it[,,t]*r
       
       ## get grid of current population size at time t
       lattice_N_curr <- lattice_N_it[,]
@@ -200,12 +235,17 @@ generate_stable_ranges <- function(p = 1, # synchrony parameter
       ## calculate local population extinction frequency (how many pops go extinct per time step)
       N_ext_local = N_ext_local + length(which(new_sizes == 0))
       
-      t = t + 1
+      ## if global population size is less than 500 individuals, restart from the beginning
+      if(t == (L-1) && sum(lattice_N_it[,]) < 500) {
+        t = 1
+        N_global <- c()
+        N_ext_local <- 0
+      }
+      else {
+        t = t + 1
+      }
     }
-    
-    ## save matrix of final pop size 
-    lattice_N_it
   }
   
-  return(all)
+  return()
 }

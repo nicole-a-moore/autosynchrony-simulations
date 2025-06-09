@@ -1,15 +1,15 @@
 ## function to generate initial species ranges under stable climate conditions 
-generate_stable_ranges <- function(p = 0, # synchrony parameter 
-                                  beta = 1, # autocorrelation parameter (spectral exponent)
-                                  r = 1.2, # maximum intrinsic rate of increase 
-                                  K = 100, # mean carrying capacity 
-                                  d = 0.1, # proportion of offspring dispersing
-                                  icp = 0.1, ## intraspecific competition parameter
-                                  L = 500, # number of time steps to simulate
-                                  nrow, # number of rows in species range matrix 
-                                  ncol, # number of columns in species range matrix
-                                  reps = 100, # number of ranges to generate 
-                                  path = "outputs/data-processed/stable-ranges" # set path
+generate_stable_ranges <- function(p = 1, # synchrony parameter 
+                                   beta = 0, # autocorrelation parameter (spectral exponent)
+                                   r = 1.2, # maximum intrinsic rate of increase 
+                                   K = 100, # mean carrying capacity 
+                                   d = 0.1, # proportion of offspring dispersing
+                                   icp = 0.1, ## intraspecific competition parameter
+                                   L = 500, # number of time steps to simulate
+                                   nrow, # number of rows in species range matrix 
+                                   ncol, # number of columns in species range matrix
+                                   reps = 100, # number of ranges to generate 
+                                   path = "outputs/data-processed/stable-ranges" # set path
 ) {
   
   ## read in function to generate time series of noise:
@@ -36,13 +36,13 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
   all <- foreach (rep = 1:reps)  %dopar% {
     
     ## cellular lattice of microcosms
-    lattice_N_it = array(dim = c(nrow,ncol,L))
+    lattice_N_it = matrix(ncol = ncol, nrow = nrow)
     lattice_r = matrix(ncol = ncol, nrow = nrow)
     lattice_E_it = matrix(ncol = ncol, nrow = nrow)
     
     ## higher proportion dispersing = less pronounced effect of suitability gradient
     lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
-    lattice_N_it[1:nrow,1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2
+    lattice_N_it[1:nrow,1:ncol] <- K/2 ## start with population size = carrying capacity / 2
     
     ## position optimum climatic conditions as row 25 on the lattice (Emax)
     opt = 25
@@ -106,6 +106,14 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
     # means = sapply(1:60, FUN = m)
     # plot(x = 1:60, y = means)
     
+    ## save environmental array as raster
+    filename =  paste0("outputs/data-processed/env-grids/grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+                    d, "_icp", icp, "_L", L, "_reps", reps, ".tif")
+    writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
+    
+    ## remove objects from env
+    rm("lattice_r_array", "lattice_r", "lattice_E_it_array", "lattice_E_it", "lattice_ac_it")
+    
     ########################################################################
     ###      run population simulations under stable climate conditions   ## 
     ########################################################################
@@ -115,10 +123,10 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
     while(t < L) {
       
       ## get grid of growth rates at time t
-      lattice_r_curr <- lattice_r_array[,,t]
+      lattice_r_curr <- rast(filename)[[1]]
       
       ## get grid of current population size at time t
-      lattice_N_curr <- lattice_N_it[,,t]
+      lattice_N_curr <- lattice_N_it[,]
       
       ##### DISPERSE #####
       ## fixed proportion of individuals have same probability of dispersing into any patch
@@ -171,7 +179,7 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
       ##### REPRODUCE #####
       # for each subpopulation, calculate the new population size after reproduction:
       new_sizes <- matrix(ncol = ncol, nrow = nrow)
-      r_curr = lattice_r_array[,,t]
+      r_curr = lattice_r_curr
       x = 1
       while (x <= ncol) {
         y = 1
@@ -192,11 +200,11 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
       new_sizes[which(is.na(new_sizes))] <- 0
       
       ## update population matrix:
-      lattice_N_it[,,t+1] = new_sizes
+      lattice_N_it = new_sizes
       
       ## save stats:
       ## calculate global population size (sum of all pop sizes)
-      N_global <- append(N_global, sum(lattice_N_it[,,t+1]))
+      N_global <- append(N_global,  sum(lattice_N_it[,]))
       ## calculate local population extinction frequency (how many pops go extinct per time step)
       N_ext_local = N_ext_local + length(which(new_sizes == 0))
       
@@ -204,10 +212,16 @@ generate_stable_ranges <- function(p = 0, # synchrony parameter
     }
     
     ## save matrix of final pop size 
-    lattice_N_it[,,t]
+    lattice_N_it
   }
   
-  return(all)
+  filename = paste0(path, "/stable-ranges_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+                    d, "_icp", icp, "_L", L, "_reps", reps, ".rds")
+  
+  ## save 
+  saveRDS(all, filename)
+  
+  return(filename)
 }
 
 

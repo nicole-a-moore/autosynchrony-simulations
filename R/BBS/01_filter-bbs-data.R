@@ -4,6 +4,7 @@ library(tidyterra)
 library(sf)
 library(terra)
 theme_set(theme_bw())
+select = dplyr::select
 
 ###################################################
 ##                add absences/NAs               ##
@@ -95,71 +96,59 @@ write.csv(cur_all, "outputs/data-processed/BBS_songbirds.csv", row.names = FALSE
 
 cur_all <- read.csv("outputs/data-processed/BBS_songbirds.csv")
 
+## read in route data 
+routes <- read.csv("data-raw/BBS/Routes.csv") %>%
+  select(CountryNum, StateNum, Route, RouteName, Latitude, Longitude)
+
 ## add absence data 
-# group by route, add years that were sampled on that route but where species wasn't found
+## add rows of 0 abundance for species if route was sampled in that year but species wasn't seen
 sampling_scheme <- weather %>% 
-  select(Route, CountryNum, StateNum, Year, code, RouteDataID, RPID)
+  select(Route, CountryNum, StateNum, Year, code, RouteDataID, RPID) %>%
+  left_join(routes) %>%
+  mutate(route = paste(Route, CountryNum, StateNum, sep = "_")) 
 
-## split by species
-split = cur_all %>%
-  group_by(AOU) %>% 
-  group_split(.) 
+## make list of all routes x all species 
+grid = expand.grid(route = unique(sampling_scheme$route), AOU = unique(cur_all$AOU))
+sampling_scheme <- left_join(sampling_scheme, grid, relationship = "many-to-many")
 
-## for each species, add absence data
-bbs_clean = c()
-for(bird in 1:length(split)) {
-  cur = split[[bird]]
-  
-  cur = cur %>%
-    left_join(sampling_scheme, .) %>%  
-    mutate(TotalAbd = ifelse(is.na(TotalAbd), 0, TotalAbd)) %>% 
-    mutate(temp = paste(Route, CountryNum, StateNum)) %>%
-    group_by(temp) %>%
-    tidyr::fill(., RPID, AOU, Latitude, Longitude, RouteName, .direction = "updown") %>%
-    ungroup() %>%
-    filter(!is.na(AOU)) %>% ## get rid of rows representing 0 abd in plots where spp was never seen once
-    select(-temp) %>%
-    distinct()
-  
-  ## for each route, add in rows with NA for years that were not sampled within the sampling period
-  cur <- cur %>%
-    select(-code) %>%
-    mutate(route = paste(Route, CountryNum, StateNum, sep = "_")) 
-  
-  bbs_key <- cur %>% 
-    group_by(route) %>%
-    mutate(first_year = min(Year), last_year = max(Year)) %>%
-    select(route, first_year, last_year) %>%
-    st_drop_geometry() %>%
-    distinct()
-  
-  for(i in 1:nrow(bbs_key)) {
-    df <- data.frame(Year = seq(bbs_key$first_year[i], bbs_key$last_year[i], by = 1), route = bbs_key$route[i])
-    
-    if(i==1) {
-      df_all = df
-    }
-    else {
-      df_all = rbind(df_all, df)
-    }
-  }
-  
-  t = left_join(df_all, cur) %>%
-    group_by(route) %>% ## group by route and species 
-    tidyr::fill(colnames(.)[which(colnames(.) != "TotalAbd")], .direction = "updown") %>%
-    as.data.frame() 
-  
-  ## combine to the rest
-  bbs_clean = rbind(bbs_clean, t)
-  
-  print(bird)
+bbs_clean = cur_all %>%
+  left_join(sampling_scheme, .) %>%
+  group_by(AOU) %>%
+  mutate(TotalAbd = ifelse(is.na(TotalAbd), 0, TotalAbd))   
+
+length(which(is.na(bbs_clean$TotalAbd))) ## 0 NA
+length(which(bbs_clean$TotalAbd == 0)) ## 33045577 zeros
+
+## add NA for missed years that each route wasn't sampled 
+year_key = bbs_clean %>% 
+  group_by(route) %>%
+  summarise(min_year = min(Year),
+         max_year = max(Year)) %>%
+  select(route, min_year, max_year) %>%
+  distinct()
+
+na_key <- c()
+for(route in 1:length(unique(year_key$route))) {
+  sub = year_key[which(year_key$route == unique(year_key$route)[route]),]
+  na_key <- rbind(na_key, data.frame(route = unique(sub$route), 
+                                     Year = seq(sub$min_year[1], sub$max_year[1])))
 }
+
+bbs_clean = left_join(na_key, bbs_clean) %>%
+  group_by(route) %>%
+  tidyr::fill(., Route, CountryNum, StateNum, RouteDataID, RPID, RouteName, Latitude,
+              Longitude, AOU, .direction = "updown") %>% select(-code)
+  
+length(which(bbs_clean$TotalAbd == 0)) ## 33045577 zeros
+length(which(is.na(bbs_clean$TotalAbd))) ## 44913 NAs
 
 ## save
 write.csv(bbs_clean, "outputs/data-processed/bbs_songbirds_with_absence.csv", row.names = FALSE)
 
+####################################################
+##      filter species by inclusion criteria      ##
+####################################################
 bbs_clean <- read.csv("outputs/data-processed/bbs_songbirds_with_absence.csv")
-
 
 ## get rid of species with:
 ## - fewer than 50 occurrences 
@@ -167,51 +156,74 @@ bbs_clean <- read.csv("outputs/data-processed/bbs_songbirds_with_absence.csv")
 ## - for whom BBS covers less than 70% of breeding and/or resident distribution in north america
 ## then, for now, just look at birds with both range edges in study area (according to Rushing et al. Table 1)
 
-## fewer than 50 occurrences
+## GET RID OF SPECIES 
+## with fewer than 50 occurrences across any route 
 bbs_key = bbs_clean %>%
   group_by(AOU) %>%
-  mutate(n_ind = sum(TotalAbd, na.rm = TRUE)) %>% 
+  mutate(n_ind = sum(TotalAbd, na.rm = T)) %>% 
   ungroup() %>%
   filter(n_ind >= 50) %>%
   select(-n_ind)
 
-length(unique(bbs_key$AOU)) ## 291 species remain
+length(unique(bbs_key$AOU)) ## 287 species remain
 
-## more than 10 years
-bbs_key = bbs_key %>%
-  filter(!is.na(TotalAbd), TotalAbd != 0) %>%
+sp_to_keep = unique(bbs_key$AOU)
+
+## with fewer than 10 years of presence across any route
+bbs_key = bbs_clean %>%
+  filter(TotalAbd != 0, !is.na(TotalAbd)) %>%
   group_by(AOU) %>%
   mutate(n_years = length(unique(Year))) %>% 
   ungroup() %>% 
   filter(n_years >= 10) %>%
   select(-n_years)
 
-length(unique(bbs_key$AOU)) ## 288 species remain
+sp_to_keep <- sp_to_keep[which(sp_to_keep %in% bbs_key$AOU)]
+length(unique(sp_to_keep)) ## 286 species remain
 
-## across at least 10 routes
-bbs_key = bbs_key %>%
+## that are not present across at least 10 routes
+bbs_key = bbs_clean %>%
+  filter(TotalAbd != 0, !is.na(TotalAbd)) %>%
   group_by(AOU) %>%
   mutate(n_routes = length(unique(route))) %>% 
   ungroup() %>% 
   filter(n_routes >= 10) %>%
   select(-n_routes)
 
-length(unique(bbs_key$AOU)) ## 270 species remain
+sp_to_keep <- sp_to_keep[which(sp_to_keep %in% bbs_key$AOU)]
+length(unique(sp_to_keep)) ## 270 species remain
 
-bbs_key <- bbs_key %>%
-  select(AOU, route) %>%
+## GET RID OF SITES 
+## remove sites with only 1 year sampled 
+bbs_key <- bbs_clean %>%
+  filter(!is.na(TotalAbd)) %>%
+  select(route, Year) %>%
+  distinct() %>%
+  group_by(route) %>%
+  filter(n() > 1)
+
+routes_to_keep = unique(bbs_key$route) 
+length(routes_to_keep) ## 5141
+
+## filter dataset to species to keep and routes to keep
+bbs_clean = filter(bbs_clean, route %in% routes_to_keep, AOU %in% sp_to_keep)
+
+name_key = select(sp, AOU, genus_sp) %>%
   distinct()
 
-bbs_clean = filter(bbs_clean, paste(bbs_clean$route, bbs_clean$AOU) %in% paste(bbs_key$route, bbs_key$AOU))
+bbs_clean = left_join(bbs_clean, name_key)
+
+## stats:
+length(unique(bbs_clean$genus_sp)) ## 270 species
+length(unique(bbs_clean$route)) ## 5141 routes
+
+## save 
+write.csv(bbs_clean, "outputs/data-processed/bbs_clean-subset.csv", row.names = F)
   
 ## read in Table 1 list from rushing et all
 rushing = read.csv("data-raw/Rushing_et_al_2020_Table1.csv")
 
 ## plot some random species on a map
-name_key = select(sp, AOU, genus_sp) %>%
-  distinct()
-
-bbs_clean = left_join(bbs_clean, name_key)
 
 ## add coordinates to dataframe
 bbs_vect = vect(bbs_clean, geom = c("Longitude", "Latitude"))
@@ -243,7 +255,7 @@ onesp %>%
 ## (see if you need to group into time periods rather than using single years)
 
 
-
+## try 
 
 
 

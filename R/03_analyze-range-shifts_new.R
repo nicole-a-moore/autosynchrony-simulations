@@ -22,6 +22,8 @@ calculate_shift_params <- function(all_ranges) {
   ## - mean y value occupancy
   ## - abuncance weighted mean y value of occupancy
   
+  ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
+  
   ## get ps and betas
   ps = c(0,1)
   betas = c(0,1)
@@ -315,66 +317,13 @@ est_ext_grid <- function(all_ranges, threshold) {
   return(all_ranges)
 }
 
-
-
-## try measuring mean latitude of cells in which the species was gained 
-## for each cell, calculate no. ext and est. over time 
-## split by cell
-
-
-
-
-
-
-
-## problem: no. of local extinctions/establishments is lower when range goes completely extinct before 1500 time steps
-## solution: calculate rate of extinction/establishment by dividing it by maximum
-
-df <- df %>%
-  group_by(beta, p, t) %>%
-  filter(!all(Nt == 0)) %>%
-  group_by(beta, p) %>%
-  mutate(t_max = max(t),
-         mean_rate_ext = mean(n_ext/t_max),
-         mean_rate_est = mean(n_est/t_max)) %>%
-  ungroup() %>%
-  select(x, y, n_ext, n_est, p, beta, t_max, mean_rate_ext, mean_rate_est) %>%
-  distinct()
-
-## plot histogram
-# df %>%
-#   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
-#   ggplot(aes(x = n_ext/t_max)) +
-#   geom_histogram() +
-#   facet_wrap(p~beta) +
-#   labs(x = "Local extinction rate", y = "Frequency") +
-#   geom_vline(aes(xintercept = mean_rate_ext), colour = "red")
-# 
-# df %>%
-#   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
-#   ggplot(aes(x = n_est/t_max)) +
-#   geom_histogram() +
-#   facet_wrap(p~beta) +
-#   labs(x = "Local establishment rate", y = "Frequency") +
-#   geom_vline(aes(xintercept = mean_rate_est), colour = "red")
-
-
-
-
-
-
-
 source("R/functions/plot_range.R")
 
 ## set up filenames
-files = list.files("outputs/data-processed/range-shifts", full.names = T)
-files <- files[which(str_detect(files, "range-shifts.csv"))]
-
-files_stable <- list.files("outputs/data-processed/stable-ranges", full.names = T)
-files_stable <- files_stable[which(str_detect(files_stable, "/rep"))]
+files = list.files("outputs/data-processed/range-shift-simulations/all-ranges", full.names = T)
 
 ## get reps
-reps = str_split_fixed(files, "outputs/data-processed/range-shifts/rep", 2)[,2]
+reps = str_split_fixed(files, "outputs/data-processed/range-shift-simulations/all-ranges/range-shifts_rep", 2)[,2]
 reps = unique(as.numeric(str_split_fixed(reps, "_p", 2)[,1]))
 
 ## for each rep
@@ -382,8 +331,6 @@ r = 1
 while(r <= length(unique(reps))) {
   
   files_sub = files[which(str_detect(files, paste0("rep", reps[r], "_")))]
-  files_stable_sub = files_stable[which(str_detect(files_stable, paste0("rep", reps[r], "_")))]
-  files_stable_sub = files_stable_sub[which(str_detect(files_stable_sub,"d0.08"))]
     
   ## make one big file of all simulation results for this rep
   all_ranges <- c()
@@ -391,20 +338,8 @@ while(r <= length(unique(reps))) {
     all_ranges = rbind(all_ranges, read.csv(files_sub[i]))
   }
   
-  ## add stable ranges 
-  stable_ranges <- c()
-  for(i in 1:length(files_stable_sub)) {
-    stable_ranges = rbind(stable_ranges, read.csv(files_stable_sub[i]))
-  }
-  stable_ranges$period = "stable"
-
-  all_ranges$period = "shifting"
-  
-  ## fix time variable 
-  all_ranges$t = all_ranges$t + 499
-  
-  ## combine
-  all_ranges <- rbind(stable_ranges, all_ranges)
+  ## create column for stable vs. shifting period
+  all_ranges$period = ifelse(all_ranges$t <= 500, "stable", "shifting")
 
   ## add est and extinction grid
   all_ranges = est_ext_grid(all_ranges, threshold = 1)
@@ -413,32 +348,38 @@ while(r <= length(unique(reps))) {
   calculate_shift_params(all_ranges = all_ranges)
   
   ## plot ranges in each time step 
-  plot_range(range_shift = all_ranges, path = "outputs/figures/range-shifts")
+  #plot_range(range_shift = all_ranges, path = "outputs/figures/range-shifts")
   
   ## calculate extinction and establishment rates
-  df <- calculate_ext_est(all_ranges, threshold = 5)
-  
-  df %>%
-    ggplot(aes(x = p, y = n_ext/t_max, colour = beta)) +
-    geom_point(position = position_jitterdodge()) +
-    facet_wrap(~beta) +
-    labs(y = "Local extinction rate", x = "Synchrony") +
-    geom_point(aes(y = mean_rate_ext), colour = "red")
-  
-  df %>%
-    ggplot(aes(x = p, y = n_est/t_max, colour = beta)) +
-    geom_point(position = position_jitterdodge()) +
-    facet_wrap(~beta) +
-    labs(y = "Local establishment rate", x = "Synchrony") +
-    geom_point(aes(y = mean_rate_est), colour = "red")
+  # df <- calculate_ext_est(all_ranges, threshold = 5)
+  # 
+  # df %>%
+  #   ggplot(aes(x = p, y = n_ext/t_max, colour = beta)) +
+  #   geom_point(position = position_jitterdodge()) +
+  #   facet_wrap(~beta) +
+  #   labs(y = "Local extinction rate", x = "Synchrony") +
+  #   geom_point(aes(y = mean_rate_ext), colour = "red")
+  # 
+  # df %>%
+  #   ggplot(aes(x = p, y = n_est/t_max, colour = beta)) +
+  #   geom_point(position = position_jitterdodge()) +
+  #   facet_wrap(~beta) +
+  #   labs(y = "Local establishment rate", x = "Synchrony") +
+  #   geom_point(aes(y = mean_rate_est), colour = "red")
   
   r = r + 1
 }
 
 
 
+## MEASURE AND PLOT LAG OVER TIME
+## - how? how to measure niche edge from simulations even?
 
+## FIX SCRIPT SO SHIFTING AND NON SHIFTING PERIODS HAPPEN TOGETHER 
 
+## TRY WITH INTERMEDIATE LEVELS OF SYNCHRONY (p=0.5)
+
+## MAKE RANGE WIDER SO THAT EXTINCTION DOESN'T HAPPEN AS QUICKLY WHEN p=1 beta=1
 
 
 
@@ -485,6 +426,37 @@ df %>%
 
 
 #### garbage 
+#############################################
+## problem: no. of local extinctions/establishments is lower when range goes completely extinct before 1500 time steps
+## solution: calculate rate of extinction/establishment by dividing it by maximum
+
+df <- df %>%
+  group_by(beta, p, t) %>%
+  filter(!all(Nt == 0)) %>%
+  group_by(beta, p) %>%
+  mutate(t_max = max(t),
+         mean_rate_ext = mean(n_ext/t_max),
+         mean_rate_est = mean(n_est/t_max)) %>%
+  ungroup() %>%
+  select(x, y, n_ext, n_est, p, beta, t_max, mean_rate_ext, mean_rate_est) %>%
+  distinct()
+
+## plot histogram
+# df %>%
+#   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
+#   ggplot(aes(x = n_ext/t_max)) +
+#   geom_histogram() +
+#   facet_wrap(p~beta) +
+#   labs(x = "Local extinction rate", y = "Frequency") +
+#   geom_vline(aes(xintercept = mean_rate_ext), colour = "red")
+# 
+# df %>%
+#   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
+#   ggplot(aes(x = n_est/t_max)) +
+#   geom_histogram() +
+#   facet_wrap(p~beta) +
+#   labs(x = "Local establishment rate", y = "Frequency") +
+#   geom_vline(aes(xintercept = mean_rate_est), colour = "red")
 ## calculate local ext and est for each grid cell
 split = all_ranges %>%
   group_by(x, y) %>%

@@ -1,7 +1,7 @@
 #######################################
 ###      setting up environment      ## 
 #######################################
-.libPaths( c( "~/projects/def-jsunday/nikkim/pop-sims/packages" , .libPaths() ) )
+.libPaths( c( "~/projects/def-jsunday/nikkim/packages" , .libPaths() ) )
 library(tidyverse)
 library(parallel)
 library(foreach)
@@ -18,20 +18,15 @@ numCores
 
 registerDoParallel(numCores)  ## use multicore, set to the number of our cores
 
-source("R/02_simulate-range-shifts.R")
+source("R/01_simulate-range-shifts.R")
 
 betas <- c(0, 1)
 ps <- c(0, 1)
 
 for(p in ps) {
   for(beta in betas) {
-    filename = paste0("outputs/data-processed/stable-ranges/stable-ranges_p", p, 
-                      "_beta", beta, "_r1.2_K100_d0.1_icp0.1_L500_reps10.rds")
-    ## read in stable ranges
-    stable_ranges = readRDS(filename)
-    
     ## call function to simulate range shifts 
-    simulate_range_shifts(ps = ps, betas = beta, stable_ranges = stable_ranges)
+    simulate_range_shifts(p = p, beta = beta)
   }
 }
 

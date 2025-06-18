@@ -16,7 +16,7 @@ generate_stable_ranges <- function(p, # synchrony parameter
   source("R/functions/generate_noise.R")
   
   ## create folder for output 
-  path = paste0(path, "/", "rep", rep, "_p", p, "_b", beta, "_icp", icp, "_d", d, "/")
+  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d)
   
   if(!dir.exists(path)) {
     dir.create(path, recursive = T)
@@ -42,6 +42,13 @@ generate_stable_ranges <- function(p, # synchrony parameter
   ## loop through replicates 
   foreach (rep = 1:reps)  %dopar% {
  
+    new_path = paste0(path, "/rep", rep)
+    
+    ## create subfolder 
+    if(!dir.exists(new_path)) {
+      dir.create(new_path, recursive = T)
+    }
+    
     ########################################################################
     ###      run population simulations under stable climate conditions   ## 
     ########################################################################
@@ -145,7 +152,7 @@ generate_stable_ranges <- function(p, # synchrony parameter
       pts$N_global = sum(lattice_N_it[,])
       pts$N_ext_local = length(which(lattice_N_it[,] == 0))
       
-      write.csv(pts, paste0(path, "/rep", rep, "_p", p, "_b", beta, "_icp", icp, "_d", d, "_t", t, 
+      write.csv(pts, paste0(new_path, "/rep", rep, "_p", p, "_b", beta, "_icp", icp, "_d", d, "_t", t, 
                                    "_stable-ranges.csv"), 
                 row.names = FALSE)
       
@@ -187,7 +194,7 @@ generate_stable_ranges <- function(p, # synchrony parameter
             ## subtract dispersers
             curr_allpops_new[y,x] <- curr_allpops_new[y,x] - dispersers
             
-            if(length(othercells) != 0) {
+            if(nrow(othercells) != 0) {
               ## subtract dispersers from population size, add them to population size at their new home   
               v = 1
               while(v <= nrow(othercells)) {
@@ -213,9 +220,22 @@ generate_stable_ranges <- function(p, # synchrony parameter
         while(y <= nrow) {
           N = curr_allpops_new[y,x]
           
-          new_sizes[y,x] = round(as.numeric(N*exp(r_curr[y,x]*(1 - as.complex(N/K)^icp))))
+          ## when population size is above carrying capacity, density feedback becomes negative 
+          ## if growth rate is also negative, population will grow 
+          ## solution: change the model to apply monotonic negative feedback
+          ## if growth rate r is negative, flip sign of density dependent term so that when r < 0, population decliens even when Nt > K
+          effective_r = ifelse(r_curr[y,x] >= 0, (1 - as.complex(N/K)^icp), 
+                               abs(1 - as.complex(N/K)^icp))
           
-          ## add demographic stochasticity
+          new_size = round(as.numeric(N*exp(r_curr[y,x]*effective_r)))
+          
+          if(is.na(new_size) || new_size < 0 || is.infinite(new_size)) {
+            new_size = 0
+          }
+          
+          new_sizes[y,x] = new_size
+          
+          ## add demographic stochasticity by sampling # offspring from a poisson distribution where mean depends on N, r, icp, and K
           new_sizes[y,x] = sample(rpois(new_sizes[y,x], n = 1000), size = 1)
           
           y = y + 1

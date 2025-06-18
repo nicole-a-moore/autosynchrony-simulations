@@ -8,8 +8,7 @@
 generate_noise <- function(beta, ## spectral exponent, between 0 (low autocorelation) and 1 (high autocorrelation)
                            p, ## synchrony parameter, between 0 (low synchrony) and 1 (high synchrony)
                            n_ts, ## the number of unique time series to create
-                           L1, ## the length of each time series 
-                           L2
+                           L ## the length of each time series 
 ){
   
   ## set a shared random element of phase:
@@ -32,17 +31,11 @@ generate_noise <- function(beta, ## spectral exponent, between 0 (low autocorela
     complex <- a*cos(phases) + a*sin(phases) ## complex coefficients
     
     dft <- fft(complex, inverse = T) ## inverse fast fourier transform the coefficients to get the temporal noise series
-    noise = as.numeric(dft[1:(L1+L2)]) ## crop the noise series to first L points
+    noise = as.numeric(dft[1:L]) ## crop the noise series to first L points
     
     ## remove mean and change variance to 1:
     noise <- noise*1/sqrt(var(noise))*sqrt(1^2)
     noise <- noise - mean(noise)
-    #plot(x = 1:(L1+L2), y = noise)
-    
-    ## remove mean from stable and shifting period separately
-    noise[1:L1] = noise[1:L1] - mean(noise[1:L1])
-    noise[(L1+1):L2] = noise[(L1+1):L2] - mean(noise[(L1+1):L2])
-    #plot(x = 1:(L1+L2), y = noise)
     
     ## estimate noise colour from a linear regression of power spectrum:
     l <- length(noise)

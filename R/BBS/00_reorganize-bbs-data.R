@@ -107,6 +107,10 @@ while(file <= length(files)) {
   file = file + 1
 }
 
+## change lat and lon to character so that they save with the right number of decimals in csv
+cur_all$Latitude <- as.character(cur_all$Latitude)
+cur_all$Longitude <- as.character(cur_all$Longitude)
+
 ## save 
 write.csv(cur_all, "outputs/data-processed/BBS_all.csv", row.names = F)
 

@@ -5,7 +5,7 @@
 files = list.files("outputs/data-processed/range-shifts", full.names = T)
 files <- files[which(str_detect(files, "range-shifts.csv"))]
 
-files_stable <- list.files("outputs/data-processed/stable-ranges/old", full.names = T)
+files_stable <- list.files("outputs/data-processed/stable-ranges", full.names = T)
 files_stable <- files_stable[which(str_detect(files_stable, "/rep"))]
 
 rep = 10
@@ -102,8 +102,8 @@ list = lapply(split, FUN = function(df) {
   ext[1] = 0
   
   est = zero_count_vec 
-  shifted = zero_count_vec[2:length(ts)]
-  est = ifelse(shifted - est[1:(length(ts)-1)] < 0, 1, 0) 
+  shifted = zero_count_vec[2:length(unique(all_ranges$t))]
+  est = ifelse(shifted - est[1:(length(unique(all_ranges$t))-1)] < 0, 1, 0) 
   est = c(0, est)
   
   return(data.frame(x = unique(df$x), y = unique(df$y), 
@@ -153,7 +153,7 @@ centroid = df %>%
 df = df %>%
   left_join(., centroid) %>%
   mutate(rel_lat = centroid - y) %>%
-  #filter(t > 750) %>%
+  filter(t < 750) %>%
   group_by(rel_lat, p, beta, period) %>%
   mutate(state_changes = sum(ext, est, na.rm = T)) %>% 
   mutate(ext_sum = sum(ext, na.rm = T)) %>% 
@@ -190,7 +190,6 @@ df %>%
   labs(x = "Latitude relative to centroid of abundance", y = "Frequency of occupancy")
 
 
-## issue: can't calculate without binning things 
 
 
 

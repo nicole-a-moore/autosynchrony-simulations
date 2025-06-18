@@ -28,7 +28,7 @@ countries <- st_union(countries)
 countries <- vect(countries)
 
 ## filter to data on a only northern cardinal
-ebb_all <- filter(cur_all, AOU == 6760) 
+ebb_all <- filter(cur_all, AOU == 5930) 
 
 ## add absence data 
 # group by route, add years that were sampled on that route but where species wasn't found
@@ -166,10 +166,15 @@ split = t %>%
 
 list = lapply(split, FUN = function(df) {
   ts = df$TotalAbd
+  
+  ## get rid of NAs but add back later
+  ts = ts[which(!is.na(ts))]
+  
   zero_count = 0
   ext = 0
   est = 0
   max_zero_count <- 0
+  zero_count_vec <- c()
   for(i in 1:length(ts)) {
     if(i == 1) {
       if(ts[i] == 0) {
@@ -213,6 +218,7 @@ list = lapply(split, FUN = function(df) {
       zero_count = 0
       max_zero_count = 0
     }
+    zero_count_vec <- append(zero_count_vec, zero_count)
   }
   
   if(any(ts[which(!is.na(ts))[1:2]] >= 1)) {
@@ -222,8 +228,25 @@ list = lapply(split, FUN = function(df) {
     new_est = TRUE
   }
   
+  ext = zero_count_vec 
+  ext[which(ext != 1)] = 0
+  ext[1] = 0
+  
+  est = zero_count_vec 
+  shifted = zero_count_vec[2:length(ts)]
+  est = ifelse(shifted - est[1:((length(ts))-1)] < 0, 1, 0) 
+  est = c(0, est)
+  
+  ## save results in df 
   ext_est = df %>%
-    mutate(n_est = est, n_ext = ext, new_est = new_est, n_ts = length(ts))
+    filter(!is.na(TotalAbd)) %>%
+    mutate(est = est, ext = ext)
+  
+  ## add back NA counts 
+  year = df$Year[which(!is.na(df$TotalAbd))]
+  ext_est = full_join(ext_est, df) %>% 
+    arrange(Year) %>%
+    mutate(n_ts = length(ts))
   
   return(ext_est)
 })
@@ -637,6 +660,8 @@ for(y in 1:length(unique(ebb_df$Year))) {
 }
 
  
+
+
 
 
 

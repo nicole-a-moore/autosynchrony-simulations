@@ -24,11 +24,12 @@ registerDoParallel(numCores)  ## use multicore, set to the number of our cores
 # p = as.numeric(command_args[2])
 
 ## read in functions
-source("R/01_generate-stable-ranges_d.R")
+source("R/01_generate-stable-ranges.R")
 
 # generate stable ranges
 for(i in 0:1) {
   for(t in 0:1) {
     filename = generate_stable_ranges(beta = i, p = t, ncol = 10, nrow = 100, reps = 10)
+    print(paste('beta', i, 'p', t))
   }
 }

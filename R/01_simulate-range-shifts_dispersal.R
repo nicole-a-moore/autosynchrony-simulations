@@ -2,6 +2,8 @@
 ## 1. generate a stable range for 500 time steps
 ## 2. begin shifting the suitability gradient
 
+## this version has increased dispersal radius
+
 simulate_range_shifts <- function(p,
                                   beta,
                                   r = 1.2, # maximum intrinsic rate of increase 
@@ -22,7 +24,7 @@ simulate_range_shifts <- function(p,
   source("R/functions/generate_noise.R")
   
   ## create folder for output 
-  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d)
+  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d, "_dispersal")
   
   if(!dir.exists(path)) {
     dir.create(path, recursive = T)
@@ -34,7 +36,7 @@ simulate_range_shifts <- function(p,
   
   ## parameters that specify shape of latitudinal variation in intrinsic rate of increase (r)
   ## shape is sigmoidal, as was done in Mustin et al. 2013
-  h = 5 ## half-saturation constant; defines the distance at which Eit = 0.5
+  h = 1 ## half-saturation constant; defines the distance at which Eit = 0.5
   s = -3 ## shape parameter; defines direction (negative = negative slope) and shape (s > 1 gives signmoid)
   Emax = 1 ## set Emax to 1
   
@@ -68,18 +70,17 @@ simulate_range_shifts <- function(p,
         lattice_E_it = matrix(ncol = ncol, nrow = nrow)
         
         ## higher proportion dispersing = less pronounced effect of suitability gradient
-        lattice_r[1:nrow,1:ncol] <- r_max ## start with growth rate = max growth rate 
+        lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
         lattice_N_it[1:(nrow/2),1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
         lattice_N_it[(nrow/2):nrow,1:ncol,1] <- 0 ## start with population size = 0 in other half 
         
         ## position optimum climatic conditions as row 25 on the lattice (Emax)
         opt = 25
-        lattice_E_it[opt,1:10] = Emax
+        lattice_E_it[opt,] = Emax
         
         ## try letting growth rate be negative instead of asymptoting at 0 
-        lattice_E_it[1:(opt-1),1:10] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
-        lattice_E_it[(opt+1):nrow,1:10] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
-        lattice_E_it[1:nrow,1:10] = lattice_E_it[1:nrow,1]*(1.2 + 0.25) - 0.25
+        lattice_E_it[1:(opt-1),] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) - 0.25
+        lattice_E_it[(opt+1):nrow,] = Emax*2*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] - 0.25
         # plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
         
         ## replicate latitudinal gradient L times 
@@ -97,7 +98,7 @@ simulate_range_shifts <- function(p,
             
             ## shift optimum by "step"
             ## shift the optimum climatic conditions on the lattice
-            lattice_E_it_array[new_opt,,(q+500)] = Emax*2
+            lattice_E_it_array[new_opt,,(q+500)] = Emax
             ## assume that conditions decline sigmoidally away from this optimum in both directions
             lattice_E_it_array[1:((new_opt)-1),,(q+500)] = Emax*2*rev((1:((new_opt)-1))^s/ 
                                                                         ((1:((new_opt)-1))^s + h^s)) - 0.25
@@ -123,14 +124,14 @@ simulate_range_shifts <- function(p,
             
             ## shift optimum by "step"
             ## assume that conditions decline sigmoidally away from this optimum in both directions
-            lattice_E_it_array[1:nrow,,(q+500)] = (Emax*2*rev((1:((new_opt)))^s/ 
-                                                                ((1:((new_opt)))^s + h^s)) - 0.25)[1:nrow]
+            lattice_E_it_array[1:nrow,,(q+500)] = (Emax*2*rev((1:((new_opt)-1))^s/ 
+                                                                ((1:((new_opt)-1))^s + h^s)) - 0.25)[1:nrow]
             # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,(q+500)])
           }
           
           q = q + 1
         }
-        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,500])
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,700])
         
         ## create noise time series for each cell, L time steps long
         lattice_ac_it = array(dim = c(nrow,ncol,L))
@@ -174,12 +175,12 @@ simulate_range_shifts <- function(p,
         }
         
         ## let noise affect r for each cell in the lattice
-        lattice_r_array = (lattice_E_it_array + lattice_ac_it)*r_max
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
+        lattice_r_array = (lattice_E_it_array + lattice_ac_it[,,1:L])*r
+        # plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,1])
         
         ## save environmental array as raster
         filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
-                           d, "_icp", icp, "_L", L, ".tif")
+                           d, "_icp", icp, "_L", L, "_dispersal.tif")
         writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
         
         ## get rid of unnecessary objects 
@@ -233,13 +234,13 @@ simulate_range_shifts <- function(p,
             ## get number of dispersers 
             dispersers = curr_allpops[y,x]*d
             ## figure out where each one disperses 
-            ## individuals can disperse into neighbouring 8 cells
-            othercells <- expand.grid(x = c(x-1,x,x+1), y = c(y-1,y,y+1)) 
+            ## individuals can disperse into neighbouring 24 cells
+            othercells <- expand.grid(x = c(x-2,x-1,x,x+1,x+2), y = c(y-2,y-1,y,y+1,y+2)) 
             othercells = othercells[!(x == othercells$x & y == othercells$y),]
-            othercells$num = 1:8
+            othercells$num = 1:24
             
-            ## randomly sample from 1:8
-            sample <- data.frame(num = sample(1:8, dispersers, replace = TRUE))
+            ## randomly sample from 1:24
+            sample <- data.frame(num = sample(1:24, dispersers, replace = TRUE))
             
             othercells <- left_join(sample, othercells, by = "num") %>%
               filter(!(y <= 0 | x <= 0 | y > nrow | x > ncol))
@@ -311,7 +312,7 @@ simulate_range_shifts <- function(p,
         lattice_N_it[,,t+1] = new_sizes
       }
       
-      ## if global population size when t == 500 is less than 500 individuals, restart from the beginning
+      ## if global population size whe t == 500 is less than 500 individuals, restart from the beginning
       if(t == 500 && sum(lattice_N_it[,,t]) < 500) {
         t = 1
         N_global <- c()

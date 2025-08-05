@@ -12,7 +12,7 @@ simulate_range_shifts <- function(p,
                                   reps = 10, # number of replicates per combination of parameters
                                   nrow, # number of rows in species range matrix 
                                   ncol, # number of columns in species range matrix
-                                  path = "outputs/data-processed/range-shift-simulations", # set path
+                                  path = "outputs/data-processed/range-shift-simulations_new-gradient_cauchy", # set path
                                   shift_rate = 100/1000
 ) {
   
@@ -34,7 +34,7 @@ simulate_range_shifts <- function(p,
   
   ## parameters that specify shape of latitudinal variation in intrinsic rate of increase (r)
   ## shape is sigmoidal, as was done in Mustin et al. 2013
-  h = 5 ## half-saturation constant; defines the distance at which Eit = 0.5
+  h = 1 ## half-saturation constant; defines the distance at which Eit = 0.5
   s = -3 ## shape parameter; defines direction (negative = negative slope) and shape (s > 1 gives signmoid)
   Emax = 1 ## set Emax to 1
   
@@ -68,7 +68,7 @@ simulate_range_shifts <- function(p,
         lattice_E_it = matrix(ncol = ncol, nrow = nrow)
         
         ## higher proportion dispersing = less pronounced effect of suitability gradient
-        lattice_r[1:nrow,1:ncol] <- r_max ## start with growth rate = max growth rate 
+        lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
         lattice_N_it[1:(nrow/2),1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
         lattice_N_it[(nrow/2):nrow,1:ncol,1] <- 0 ## start with population size = 0 in other half 
         
@@ -77,10 +77,25 @@ simulate_range_shifts <- function(p,
         lattice_E_it[opt,1:10] = Emax
         
         ## try letting growth rate be negative instead of asymptoting at 0 
-        lattice_E_it[1:(opt-1),1:10] = Emax*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s))
-        lattice_E_it[(opt+1):nrow,1:10] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
-        lattice_E_it[1:nrow,1:10] = lattice_E_it[1:nrow,1]*(1.2 + 0.25) - 0.25
+        # lattice_E_it[1:(opt-1),1:10] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) - 0.25
+        # lattice_E_it[(opt+1):nrow,1:10] = Emax*2*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] - 0.25
         # plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        
+        ## make conditions decline linearly away from optimum
+        ## linear
+        # lattice_E_it[1:(opt-1),1:10] = rev((1:(opt-1)))*-1/10+Emax
+        # lattice_E_it[(opt+1):nrow,1:10] = (((1:nrow))*-1/10+Emax)[1:(nrow-opt)]
+        # plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
+        
+        ## cauchy:
+        seq1 = seq(from = (opt - opt - opt)*0.2, to = (opt - opt - 0.2), by = 0.2)
+        seq2 = seq(from = (opt - opt + 0.2), to = (nrow - opt)*0.2, by = 0.2)
+        seq = c(seq1, c(0), seq2)
+        
+        max = max(dcauchy(location = -1, scale = 2, x = seq))
+        grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+        
+        lattice_E_it[1:nrow,1:10] = grad[2:length(grad)]
         
         ## replicate latitudinal gradient L times 
         lattice_E_it_array <- replicate(L, lattice_E_it)
@@ -90,43 +105,123 @@ simulate_range_shifts <- function(p,
         q = 1
         new_opt = 0
         while(q <= (L-500)) {
-          ## if optimum is still on grid
-          if(new_opt < nrow-1) {
-            step = floor(shift_rate*q)
-            new_opt = opt + step
+          
+          step = floor(shift_rate*q)
+          new_opt = opt + step
+          
+          if(new_opt == nrow) {
+            seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+            seq = c(seq1, c(0))
             
-            ## shift optimum by "step"
-            ## shift the optimum climatic conditions on the lattice
-            lattice_E_it_array[new_opt,,(q+500)] = Emax*2
-            ## assume that conditions decline sigmoidally away from this optimum in both directions
-            lattice_E_it_array[1:((new_opt)-1),,(q+500)] = Emax*2*rev((1:((new_opt)-1))^s/ 
-                                                                        ((1:((new_opt)-1))^s + h^s)) - 0.25
-            lattice_E_it_array[((new_opt)+1):nrow,,(q+500)] = Emax*2*((1:nrow)^s / 
-                                                                        ((1:nrow)^s + h^s))[1:(nrow-(new_opt))] - 0.25
-            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
-          }
-          else if(new_opt == (nrow - 1)) {
-            step = floor(shift_rate*q)
-            new_opt = opt + step
+            max = max(dcauchy(location = -1, scale = 2, x = seq))
+            grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
             
-            ## shift the optimum climatic conditions on the lattice
-            lattice_E_it_array[new_opt,,(q+500)] = Emax
-            ## assume that conditions decline sigmoidally away from this optimum in both directions
-            lattice_E_it_array[1:(new_opt - 1),,(q+500)] = (Emax*2*rev((1:((new_opt)-1))^s/ 
-                                                                         ((1:((new_opt)-1))^s + h^s)) - 0.25)
-            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
+            lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
           }
-          ## otherwise
+          else if (new_opt > nrow) {
+            ## cauchy distribution:
+            seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+            seq = c(seq1)[1:101]
+            
+            max = max(dcauchy(location = -1, scale = 2, x = seq))
+            grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+            
+            lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
+          } 
           else {
-            step = floor(shift_rate*q)
-            new_opt = opt + step
+            seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+            seq2 = seq(from = (new_opt - new_opt + 0.2), to = (nrow - new_opt)*0.2, by = 0.2)
+            seq = c(seq1, c(0), seq2)
             
-            ## shift optimum by "step"
-            ## assume that conditions decline sigmoidally away from this optimum in both directions
-            lattice_E_it_array[1:nrow,,(q+500)] = (Emax*2*rev((1:((new_opt)))^s/ 
-                                                                ((1:((new_opt)))^s + h^s)) - 0.25)[1:nrow]
-            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,(q+500)])
+            max = max(dcauchy(location = -1, scale = 2, x = seq))
+            grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+            
+            lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
           }
+          
+          
+          # ## if optimum is still on grid
+          # if(new_opt < nrow-1) {
+          #   step = floor(shift_rate*q)
+          #   new_opt = opt + step
+          #   
+          #   ## shift optimum by "step"
+          #   ## shift the optimum climatic conditions on the lattice
+          #   #lattice_E_it_array[new_opt,,(q+500)] = Emax
+          #   
+          #   ## assume that conditions decline sigmoidally away from this optimum in both directions
+          #   # lattice_E_it_array[1:((new_opt)-1),,(q+500)] = Emax*2*rev((1:((new_opt)-1))^s/ 
+          #   #                                                             ((1:((new_opt)-1))^s + h^s)) - 0.25
+          #   # lattice_E_it_array[((new_opt)+1):nrow,,(q+500)] = Emax*2*((1:nrow)^s / 
+          #   #                                                             ((1:nrow)^s + h^s))[1:(nrow-(new_opt))] - 0.25
+          #   
+          #   ## linear
+          #   # lattice_E_it_array[1:((new_opt)-1),,(q+500)] = rev((1:(new_opt-1)))*-1/10+Emax
+          #   # lattice_E_it_array[((new_opt)+1):nrow,,(q+500)] = (((1:nrow))*-1/10+Emax)[1:(nrow-new_opt)]
+          #   
+          #   ## cauchy distribution:
+          #   seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+          #   seq2 = seq(from = (new_opt - new_opt + 0.2), to = (nrow - new_opt)*0.2, by = 0.2)
+          #   seq = c(seq1, c(0), seq2)
+          #   
+          #   max = max(dcauchy(location = -1, scale = 2, x = seq))
+          #   grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+          #   
+          #   lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
+          #   
+          #   # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q+500])
+          # }
+          # else if(new_opt == (nrow - 1)) {
+          #   step = floor(shift_rate*q)
+          #   new_opt = opt + step
+          #   
+          #   ## shift the optimum climatic conditions on the lattice
+          #   # lattice_E_it_array[new_opt,,(q+500)] = Emax
+          #   # ## assume that conditions decline sigmoidally away from this optimum in both directions
+          #   # lattice_E_it_array[1:(new_opt - 1),,(q+500)] = (Emax*2*rev((1:((new_opt)-1))^s/ 
+          #   #                                                              ((1:((new_opt)-1))^s + h^s)) - 0.25)
+          #   
+          #   ## linear
+          #   # lattice_E_it_array[new_opt,,(q+500)] = Emax
+          #   # lattice_E_it_array[1:(new_opt - 1),,(q+500)] = rev((1:(new_opt-1)))*-1/10+Emax
+          #   
+          #   # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q+500])
+          #   
+          #   ## cauchy distribution:
+          #   seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+          #   seq2 = seq(from = (new_opt - new_opt + 0.2), to = (nrow - new_opt)*0.2, by = 0.2)
+          #   seq = c(seq1, c(0), seq2)
+          #   
+          #   max = max(dcauchy(location = -1, scale = 2, x = seq))
+          #   grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+          #   
+          #   lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
+          # 
+          # }
+          # ## otherwise
+          # else {
+          #   step = floor(shift_rate*q)
+          #   new_opt = opt + step
+          #   
+          #   ## shift optimum by "step"
+          #   ## assume that conditions decline sigmoidally away from this optimum in both directions
+          #   # lattice_E_it_array[1:nrow,,(q+500)] = (Emax*2*rev((1:((new_opt)))^s/ 
+          #   #                                                     ((1:((new_opt)))^s + h^s)) - 0.25)[1:nrow]
+          # 
+          #   ## linear
+          #   # lattice_E_it_array[1:nrow,,(q+500)] = (rev((1:(new_opt)))*-1/10+Emax)[1:nrow]
+          #   
+          #   ## cauchy distribution:
+          #   seq1 = seq(from = (new_opt - new_opt - new_opt)*0.2, to = (new_opt - new_opt - 0.2), by = 0.2)
+          #   seq = c(seq1, c(0))
+          #   
+          #   max = max(dcauchy(location = -1, scale = 2, x = seq))
+          #   grad = dcauchy(location = 0, scale = 2, x = seq)/max*(r+0.6)-0.6
+          #   
+          #   lattice_E_it_array[1:nrow,,(q+500)] = grad[2:length(grad)]
+          #   
+          #   # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,(q+500)])
+          # }
           
           q = q + 1
         }
@@ -174,12 +269,12 @@ simulate_range_shifts <- function(p,
         }
         
         ## let noise affect r for each cell in the lattice
-        lattice_r_array = (lattice_E_it_array + lattice_ac_it)*r_max
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
+        lattice_r_array = (lattice_E_it_array + lattice_ac_it)*r
+        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,805])
         
         ## save environmental array as raster
         filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
-                           d, "_icp", icp, "_L", L, ".tif")
+                           d, "_icp", icp, "_L", L, "_new-gradient.tif")
         writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
         
         ## get rid of unnecessary objects 
@@ -324,6 +419,3 @@ simulate_range_shifts <- function(p,
     
   }
  }
-
-
-

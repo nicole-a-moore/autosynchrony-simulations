@@ -2,40 +2,18 @@
 
 
 ## set up filenames
-files = list.files("outputs/data-processed/range-shifts", full.names = T)
-files <- files[which(str_detect(files, "range-shifts.csv"))]
+folders = list.files("outputs/data-processed/range-shift-simulations", full.names = T)
+folders <- folders[which(str_detect(folders, "outputs/data-processed/range-shift-simulations/p"))]
 
-files_stable <- list.files("outputs/data-processed/stable-ranges/old", full.names = T)
-files_stable <- files_stable[which(str_detect(files_stable, "/rep"))]
-
-rep = 10
-
-## get reps
-files_sub = files[which(str_detect(files, paste0("rep", rep, "_")))]
-files_stable_sub = files_stable[which(str_detect(files_stable, paste0("rep", rep, "_")))]
-
-files_sub[4] = "outputs/data-processed/range-shifts/rep4_p1_b1_icp0.1_range-shifts.csv"
-
-## make one big file of all simulation results for this rep
+## make one big file of all simulation results 
 all_ranges <- c()
-for(i in 1:length(files_sub)) {
-  all_ranges = rbind(all_ranges, read.csv(files_sub[i]))
+for(x in 1:length(folders)) {
+  files_sub = list.files(paste0(folders[x], "/rep1"), full.names = T)
+  for(i in 1:length(files_sub)) {
+    all_ranges = rbind(all_ranges, read.csv(files_sub[i]))
+    print(paste("i", i, "x", x))
+  }
 }
-
-## add stable ranges 
-stable_ranges <- c()
-for(i in 1:length(files_stable_sub)) {
-  stable_ranges = rbind(stable_ranges, read.csv(files_stable_sub[i]))
-}
-stable_ranges$period = "stable"
-
-all_ranges$period = "shifting"
-
-## fix time variable 
-all_ranges$t = all_ranges$t + 499
-
-## combine
-all_ranges <- rbind(stable_ranges, all_ranges)
 
 
 threshold = 1
@@ -45,6 +23,7 @@ split = all_ranges %>%
   group_split(.)
 
 list = lapply(split, FUN = function(df) {
+  df = arrange(df, t)
   ts = df$Nt
   zero_count = 0
   ext = 0
@@ -110,12 +89,15 @@ list = lapply(split, FUN = function(df) {
                     p = unique(df$p), beta = unique(df$beta), 
                     t = 1:nrow(df),
                     est = est, ext = ext, 
-                    Nt = ts, period = df$period))
+                    Nt = ts))
 }
 )
 
 ## bind them all 
 df <- bind_rows(list)
+
+## add period
+df$period = ifelse(df$t <= 500, "stable", "shifting")
 
 df <- filter(df, t > 400) ## get rid of times when stable range wasn't yet stable
 
@@ -153,14 +135,14 @@ centroid = df %>%
 df = df %>%
   left_join(., centroid) %>%
   mutate(rel_lat = centroid - y) %>%
-  #filter(t > 750) %>%
+  #filter(t < 750) %>%
   group_by(rel_lat, p, beta, period) %>%
   mutate(state_changes = sum(ext, est, na.rm = T)) %>% 
   mutate(ext_sum = sum(ext, na.rm = T)) %>% 
   mutate(est_sum = sum(est, na.rm = T)) %>% 
   mutate(occ = length(which(Nt != 0))) %>% 
   ungroup() %>%
-  mutate(t_max = ifelse(t_max < 250, t_max, 250)) %>%
+  #mutate(t_max = ifelse(t_max < 250, t_max, 250)) %>%
   mutate(freq_state_changes = state_changes/t_max,
          ext_rate = ext_sum/t_max,
          est_rate = est_sum/t_max,

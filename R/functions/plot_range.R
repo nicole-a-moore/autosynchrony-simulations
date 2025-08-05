@@ -13,8 +13,15 @@ plot_range = function(range_shift, path) {
       
       range_shift_sub = range_shift[which(range_shift$p == p & range_shift$beta == beta),]
       
+      n_ts = length(unique(range_shift_sub$t))
+      shift_rate = unique(range_shift_sub$shift_rate)
+      
+      ## calculate location of max suitability over time
+      max_suit = data.frame(time = 1:n_ts,
+                            max_suit = c(rep(25, length.out = 500), shift_rate*(1:(n_ts-500)) + 25))
+      
       time = 1
-      while(time <= length(unique(range_shift_sub$t))) {
+      while(time <= n_ts) {
         
         ## filter to time t
         cur = range_shift_sub %>%
@@ -29,19 +36,6 @@ plot_range = function(range_shift, path) {
         
         mid_occ_lat = cur[which(cur$Nt != 0),]
         mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
-          
-        params2 = cur %>%
-          filter(est == 1) %>%
-          group_by(t) %>%
-          filter(y <= mid_occ_lat) %>%
-          summarize(est_edge = quantile(y, c(0.05), na.rm = T))
-        params3 = cur %>%
-          filter(ext == 1) %>%
-          group_by(t) %>%
-          filter(y > mid_occ_lat) %>%
-          summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
-        
-        ## in future: add edges of niche to plot 
       
         if(!length(which(cur$Nt == 0)) == length(cur$Nt)) {
           ## plot raster
@@ -55,11 +49,11 @@ plot_range = function(range_shift, path) {
             labs(fill = "") +
             scale_fill_continuous(limits = c(0, 200), type = "viridis", na.value = "white") +
             theme(panel.border = element_rect(colour = "black", fill = NA)) +
-            geom_hline(yintercept = params$q95_y, colour = "red") +
+            geom_hline(yintercept = params$q95_y, colour = "forestgreen") +
             geom_hline(yintercept = params$q5_y, colour = "forestgreen") +
-            geom_hline(yintercept = params2$est_edge, colour = "yellow") +
             geom_hline(yintercept = params$abd_centroid, colour = "black") +
-            geom_hline(yintercept = params3$ext_edge, colour = "yellow") 
+            geom_hline(yintercept = max_suit$max_suit[which(max_suit$time == time)], colour = "red") 
+            
             
           dir =  paste0(path, "/rep", unique(range_shift_sub$rep), "_p", 
                         unique(range_shift_sub$p), "_b", 

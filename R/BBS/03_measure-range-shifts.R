@@ -24,7 +24,8 @@ bb %>%
   select(Latitude, Longitude, Year) %>%
   distinct() %>%
   ggplot(aes(x = Year, y = Latitude)) +
-  geom_point()
+  geom_point() +
+  geom_smooth(method = "lm")
 ## 1980 is when highish-latitude sites (>55 deg N) begin being sampled consistently
 ## 1993 is when high-latitude sites (>65 deg N) begin being sampled consistently
 ## to avoid detecting range shift because of shift in sampling latitude, group observations before 1980/1993 together and begin measuring shift from there
@@ -90,6 +91,31 @@ range_shift_sum <- bb %>%
 
 range_shift_sum <- left_join(range_shift_sum, n_edges) 
 
+## calculate mean min and max latitude 
+mean_max_lat = range_shift_sum %>%
+  mutate(start_year = ifelse(n_edge + 1 <= n_edge_sample, 1980, 1993)) %>% ## decide what year to start at based on northern range edge position in 1980 relative to sampling 
+  ## if latitudinal edge of sampling before 1980 is more 10 degree latitude higher than range edge, start measuring shift at 1980
+  ## otherwise start at 1993
+  mutate(year = ifelse(Year <= start_year, start_year, Year)) %>% ## combine data from start year and before together
+  group_by(genus_sp, AOU, year) %>% ## group by year and species 
+  ## calculate range edge metrics for each year for each species:
+  arrange(-Latitude) %>%
+  slice_head(n = 5) %>% 
+  summarise(mean_max_lat = mean(Latitude))%>%
+  st_drop_geometry()
+
+mean_min_lat = range_shift_sum %>%
+  mutate(start_year = ifelse(n_edge + 1 <= n_edge_sample, 1980, 1993)) %>% ## decide what year to start at based on northern range edge position in 1980 relative to sampling 
+  ## if latitudinal edge of sampling before 1980 is more 10 degree latitude higher than range edge, start measuring shift at 1980
+  ## otherwise start at 1993
+  mutate(year = ifelse(Year <= start_year, start_year, Year)) %>% ## combine data from start year and before together
+  group_by(genus_sp, AOU, year) %>% ## group by year and species 
+  ## calculate range edge metrics for each year for each species:
+  arrange(Latitude) %>%
+  slice_head(n = 5) %>% 
+  summarise(mean_min_lat = mean(Latitude)) %>%
+  st_drop_geometry()
+
 range_shift_sum <- range_shift_sum %>%
   mutate(start_year = ifelse(n_edge + 1 <= n_edge_sample, 1980, 1993)) %>% ## decide what year to start at based on northern range edge position in 1980 relative to sampling 
   ## if latitudinal edge of sampling before 1980 is more 10 degree latitude higher than range edge, start measuring shift at 1980
@@ -103,6 +129,9 @@ range_shift_sum <- range_shift_sum %>%
             p5 = quantile(Latitude, 0.05)) %>% ## calculate range edge metrics for that year       
   ungroup() %>% ## ungroup
   st_drop_geometry() ## drop geometry
+
+range_shift_sum <- left_join(range_shift_sum, mean_max_lat) %>%
+  left_join(., mean_min_lat)
 
 ## calculate shift in 95 and 5 percentile latitude of sampled routes where each species was seen over time
 ## if there is a shift in 'range edges' of sampling, cannot be sure range shift observed is not caused by change in sampling latitude 
@@ -133,11 +162,22 @@ sampling_sum <- sampling_sum %>%
 
 ## plot over time
 range_shift_sum %>%
-  gather(key = "range_edge", value = "latitude", c(p95_w, p95, p5_w, p5)) %>%
+  gather(key = "range_edge", value = "latitude", c(p95_w, p95, p5_w, p5, mean_min_lat, mean_max_lat)) %>%
   ggplot(aes(x = year, y = latitude, colour = range_edge, group = AOU)) +
   geom_point(size = 0.1) +
   geom_smooth(method = "lm", se = F, size = 0.2) +
   facet_wrap(~range_edge) 
+
+range_shift_sum %>%
+  gather(key = "range_edge", value = "latitude", c(p95_w, p95, p5_w, p5, mean_min_lat, mean_max_lat)) %>%
+  filter(range_edge %in% c("p5", "p95")) %>%
+  ggplot(aes(x = year, y = latitude, colour = range_edge, group = AOU)) +
+  geom_point(size = 0.1) +
+  geom_line(method = "lm", se = F, size = 0.2) +
+  facet_wrap(~range_edge) +
+  labs(x = "Year", y = "Latitude", colour = "Range edge") 
+  
+
 
 sampling_sum %>%
   gather(key = "range_edge", value = "latitude", c(p95, p5)) %>%
@@ -215,7 +255,6 @@ write.csv(lms, "outputs/data-processed/bbs-range-shift-rates.csv", row.names = F
 ############################################
 ##          map range edge shift          ##
 ############################################
-
 sp = 1
 while(sp <= length(unique(bb$AOU))) {
   
@@ -269,13 +308,29 @@ while(sp <= length(unique(bb$AOU))) {
     if(length(which(sp_df$Year == year & sp_df$TotalAbd != 0 & !is.na(sp_df$TotalAbd))) != 0) {
       
       if(year > start_year) {
+        ## calculate mean min and max latitude 
+        mean_max_lat = sp_pres %>%
+          filter(Year == year) %>%
+          arrange(-Latitude) %>%
+          slice_head(n = 5) %>% 
+          summarise(mean_max_lat = mean(Latitude))%>%
+          st_drop_geometry()
+        mean_min_lat = sp_pres %>%
+          filter(Year == year) %>%
+          arrange(Latitude) %>%
+          slice_head(n = 5) %>% 
+          summarise(mean_min_lat = mean(Latitude)) %>%
+          st_drop_geometry()
+        
         ## calculate 95th percentile of occupied cells
         cur <- sp_pres %>%
           filter(Year == year) %>%
           mutate(p95_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.95),
                  p5_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.05)) %>%
           mutate(p95 = quantile(Latitude, 0.95), 
-                 p5 = quantile(Latitude, 0.05)) 
+                 p5 = quantile(Latitude, 0.05), 
+                 mean_min_lat = mean_min_lat$mean_min_lat,
+                 mean_max_lat = mean_max_lat$mean_max_lat)
         
         p = cur %>%
           ggplot(aes(colour = TotalAbd)) +
@@ -290,7 +345,9 @@ while(sp <= length(unique(bb$AOU))) {
           geom_hline(aes(yintercept = unique(p95)), colour = "red") +
           geom_hline(aes(yintercept = unique(p95_w)), colour = "blue") +
           geom_hline(aes(yintercept = unique(p5)), colour = "red") +
-          geom_hline(aes(yintercept = unique(p5_w)), colour = "blue")
+          geom_hline(aes(yintercept = unique(p5_w)), colour = "blue") +
+          geom_hline(aes(yintercept = unique(mean_min_lat)), colour = "green") +
+          geom_hline(aes(yintercept = unique(mean_max_lat)), colour = "green") 
         
         ggsave(p, path = paste0("outputs/figures/range-edge-shifts/", 
                                 str_replace_all(unique(sp_df$genus_sp), " ", "\\_")), 
@@ -300,13 +357,30 @@ while(sp <= length(unique(bb$AOU))) {
       else if (year == start_year){
         min_year = min(sp_df$Year)
         
+        ## calculate mean min and max latitude 
+        mean_max_lat = sp_pres %>%
+          filter(Year <= start_year) %>%
+          arrange(-Latitude) %>%
+          slice_head(n = 5) %>% 
+          summarise(mean_max_lat = mean(Latitude))%>%
+          st_drop_geometry()
+        mean_min_lat = sp_pres %>%
+          filter(Year <= start_year) %>%
+          arrange(Latitude) %>%
+          slice_head(n = 5) %>% 
+          summarise(mean_min_lat = mean(Latitude)) %>%
+          st_drop_geometry()
+        
+        
         ## calculate 95th percentile of occupied cells
         cur <- sp_pres %>%
           filter(Year <= start_year) %>%
           mutate(p95_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.95),
                  p5_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.05)) %>%
           mutate(p95 = quantile(Latitude, 0.95), 
-                 p5 = quantile(Latitude, 0.05)) 
+                 p5 = quantile(Latitude, 0.05),
+                 mean_min_lat = mean_min_lat$mean_min_lat,
+                 mean_max_lat = mean_max_lat$mean_max_lat)
         
         absences = filter(sp_df, TotalAbd == 0 & Year <= year) %>%
           select(geometry) %>%
@@ -325,7 +399,9 @@ while(sp <= length(unique(bb$AOU))) {
           geom_hline(aes(yintercept = unique(p95)), colour = "red") +
           geom_hline(aes(yintercept = unique(p95_w)), colour = "blue") +
           geom_hline(aes(yintercept = unique(p5)), colour = "red") +
-          geom_hline(aes(yintercept = unique(p5_w)), colour = "blue")
+          geom_hline(aes(yintercept = unique(p5_w)), colour = "blue") +
+          geom_hline(aes(yintercept = unique(mean_min_lat)), colour = "green") +
+          geom_hline(aes(yintercept = unique(mean_max_lat)), colour = "green")
         
         ggsave(p, path = paste0("outputs/figures/range-edge-shifts/", 
                                 str_replace_all(unique(sp_df$genus_sp), " ", "\\_")), 
@@ -339,3 +415,129 @@ while(sp <= length(unique(bb$AOU))) {
   print(paste0("Species: ", sp))
   sp = sp + 1
 }
+
+
+
+## zoom in on Cardinalis cardinalis leading edge 
+sp_df = bb[which(bb$genus_sp == "Cardinalis cardinalis"),] 
+
+## make data frame an sf data frame
+sp_df <- vect(sp_df, geom = c("Longitude", "Latitude")) %>%
+  st_as_sf(.)
+
+st_crs(sp_df) = st_crs(countries)
+
+## add coordinates back to df as columns
+sp_df <- cbind(sp_df, st_coordinates(sp_df)) %>%
+  rename("Latitude" = Y, "Longitude" = X)
+
+## make df of just presence
+sp_pres <- sp_df %>%
+  filter(!is.na(TotalAbd) & TotalAbd != 0) %>%
+  ## get rid of routes where the species was never seen
+  group_by(route) %>%
+  mutate(sum_abd = sum(TotalAbd)) %>%
+  ungroup() %>%
+  filter(sum_abd >= 1) 
+
+## create directory for plots
+if(!dir.exists(paste0("outputs/figures/range-edge-shifts/", 
+                      str_replace_all(unique(sp_df$genus_sp), " ", "\\_")))) {
+  dir.create(paste0("outputs/figures/range-edge-shifts/", 
+                    str_replace_all(unique(sp_df$genus_sp), " ", "\\_")))
+}
+
+## figure out which year to start measuring shift
+## if species' mean max latitude occurs more than than 1 degrees from the mean max latitude if sampling within the longitudinal bounds of the species' presence in 1980, group obs before 1980 and start ts there
+## otherwise, group obs before 19993 and start ts there
+start_year = 1980
+
+## plot data in each year and save 
+for(y in 1:length(unique(sp_df$Year))) {
+  
+  year = unique(sp_df$Year)[order(unique(sp_df$Year))][y]
+  
+  ## if data for that year
+  if(length(which(sp_df$Year == year & sp_df$TotalAbd != 0 & !is.na(sp_df$TotalAbd))) != 0) {
+    
+    if(year >= start_year) {
+      ## calculate 95th percentile of occupied cells
+      cur <- sp_pres %>%
+        filter(Year == year) %>%
+        mutate(p95_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.95),
+               p5_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.05)) %>%
+        mutate(p95 = quantile(Latitude, 0.95), 
+               p5 = quantile(Latitude, 0.05)) 
+      
+      p = cur %>%
+        ggplot(aes(colour = TotalAbd)) +
+        geom_sf(inherit.aes = FALSE, data = countries) +
+        geom_sf(size = 0.5, data = filter(sp_df, TotalAbd == 0 & Year == year), inherit.aes = FALSE, 
+                fill = "transparent", stroke = 0.1, shape = 1, alpha = 0.5) +
+        geom_sf(size = 0.3) +
+        scale_colour_gradient(trans = "log", limits = c(1, max(sp_df$TotalAbd, na.rm = T))) +
+        scale_x_continuous(limits = c(-165,-55)) +
+        scale_y_continuous(limits = c(40,52)) +
+        labs(colour = "Total abundance", title = year) +
+        geom_hline(aes(yintercept = unique(p95)), colour = "red") +
+        geom_hline(aes(yintercept = unique(p95_w)), colour = "blue") +
+        geom_hline(aes(yintercept = unique(p5)), colour = "red") +
+        geom_hline(aes(yintercept = unique(p5_w)), colour = "blue")
+      
+      ggsave(p, path = paste0("outputs/figures/range-edge-shifts/", 
+                              str_replace_all(unique(sp_df$genus_sp), " ", "\\_")), 
+             filename = paste0("edge_BBS_", str_replace_all(unique(sp_df$genus_sp)," ", "\\_"), "_", 
+                               year, ".png"), width = 6, height = 3)
+    }
+    else if (year == start_year){
+      min_year = min(sp_df$Year)
+      
+      ## calculate 95th percentile of occupied cells
+      cur <- sp_pres %>%
+        filter(Year <= start_year) %>%
+        mutate(p95_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.95),
+               p5_w = modi::weighted.quantile(Latitude, w = TotalAbd, 0.05)) %>%
+        mutate(p95 = quantile(Latitude, 0.95), 
+               p5 = quantile(Latitude, 0.05)) 
+      
+      absences = filter(sp_df, TotalAbd == 0 & Year <= year) %>%
+        select(geometry) %>%
+        unique()
+      
+      p = cur %>%
+        ggplot(aes(colour = TotalAbd)) +
+        geom_sf(inherit.aes = FALSE, data = countries) +
+        geom_sf(size = 0.5, data = absences, inherit.aes = FALSE,
+                fill = "transparent", stroke = 0.1, shape = 1, alpha = 0.5) +
+        geom_sf(size = 0.1) +
+        scale_colour_gradient(trans = "log", limits = c(1, max(sp_df$TotalAbd, na.rm = T))) +
+        scale_x_continuous(limits = c(-165,-55)) +
+        scale_y_continuous(limits = c(25,70)) +
+        labs(colour = "Total abundance", title = year) +
+        geom_hline(aes(yintercept = unique(p95)), colour = "red") +
+        geom_hline(aes(yintercept = unique(p95_w)), colour = "blue") +
+        geom_hline(aes(yintercept = unique(p5)), colour = "red") +
+        geom_hline(aes(yintercept = unique(p5_w)), colour = "blue")
+      
+      ggsave(p, path = paste0("outputs/figures/range-edge-shifts/", 
+                              str_replace_all(unique(sp_df$genus_sp), " ", "\\_")), 
+             filename = paste0("edge_BBS_", 
+                               str_replace_all(unique(sp_df$genus_sp)," ", "\\_"),"_", 
+                               min_year, "to", start_year, ".png"), width = 6, height = 3)
+    }
+  }
+}
+
+## make example plot for cardinal
+## plot over time
+plot = range_shift_sum %>%
+  filter(genus_sp == "Cardinalis cardinalis") %>%
+  gather(key = "range_edge", value = "latitude", c(p95_w, p95, p5_w, p5, mean_min_lat, mean_max_lat)) %>%
+  ggplot(aes(x = year, y = latitude, colour = range_edge, group = range_edge)) +
+  geom_point(size = 0.1) +
+  geom_smooth(method = "lm", se = F, size = 0.2) +
+  scale_color_manual(values = c("green", "green", "red", "blue", "red", "blue")) +
+  labs(x = "Year", y = "Latitude") 
+
+ggsave(plot, path = "outputs/figures/range-edge-shifts/Cardinalis_cardinalis/", 
+       filename = "plot-year-vs-latitude_full-range.png", width = 5, height = 3)

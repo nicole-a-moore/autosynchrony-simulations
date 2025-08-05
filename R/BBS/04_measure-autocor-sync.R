@@ -38,7 +38,7 @@ routes = bb %>%
 
 ## extract temporal autocorrelation at each unique route in the bbs data 
 st_crs(routes) = st_crs(countries)
-beta <- extract(r, routes)
+beta <- terra::extract(r, routes)
 routes$beta = beta$s_spec_exp_PSD_low_all
 
 routes %>% 
@@ -317,20 +317,29 @@ dim(clim_array_all)[3] == dim(all_array)[3]
 # log_file <- "outputs/data-processed/log.txt"
 # file.create(log_file)
 
+## get row and column of each cell 
+temp = climatology_stack[[1]]
+values(temp) = 1
+spts <- rasterToPoints(temp)
+
+rownames(all_array) = unique(spts[,2])
+colnames(all_array) = unique(spts[,1])
+
 result = c()
 i = 1
-result = foreach(i = 1:nrow(pw), .combine = 'rbind') %dopar% {
+while(i <= nrow(pw))  {
  # write(paste("Processing i =", i), file = log_file, append = TRUE)
   
-  ## get time series at each cell
-  rowcol <- rowColFromCell(climatology_stack[[1]], c(pw$cell1[i], pw$cell2[i]))
+  rowcol = xyFromCell(climatology_stack, c(pw$cell1[i])) %>%
+    rbind(., xyFromCell(climatology_stack, c(pw$cell2[i])))
   
-  ts1 = all_array[rowcol[1,1], rowcol[1,2], ]  # note: row = y, col = x
-  ts2 = all_array[rowcol[2,1], rowcol[2,2], ]  
+  ## get time series at each cell
+  ts1 = all_array[which(rownames(all_array) == rowcol[1,2]), which(colnames(all_array) == rowcol[1,1]),]  # note: row = y, col = x
+  ts2 = all_array[which(rownames(all_array) == rowcol[2,2]), which(colnames(all_array) == rowcol[2,1]),]
   
   ## get seasonal climatologies at each cell 
-  clim1 =  clim_array[rowcol[1,1], rowcol[1,2], ] 
-  clim2 =  clim_array[rowcol[2,1], rowcol[2,2], ] 
+  clim1 =  clim_array_all[which(rownames(all_array) == rowcol[1,2]), which(colnames(all_array) == rowcol[1,1]),]
+  clim2 =  clim_array_all[which(rownames(all_array) == rowcol[2,2]), which(colnames(all_array) == rowcol[2,1]),]
   
   ## and subtract climatology from temp
   ts1 = ts1 - clim1
@@ -340,8 +349,13 @@ result = foreach(i = 1:nrow(pw), .combine = 'rbind') %dopar% {
   pc = cor(ts1, ts2, method = 'pearson')
   
   ## return the pearson corr
-  return(c(pc))
+  result = append(result, pc)
+  
+  print(round((i/102689)*100, 4))
+  
+  i = i + 1
 }
+
 ## add to df
 pw$pearson_corr = as.vector(result)
 
@@ -353,6 +367,9 @@ pear_cor <- left_join(int_all, pw)
 
 ## get rid of routes falling in cells with no temp data 
 pear_cor <- pear_cor[which(!is.na(pear_cor$pearson_corr)),]
+
+## save 
+write.csv(pear_cor, "outputs/data-processed/synchrony_all.csv", row.names = T)
 
 ## for each species, calculate mean cross correlation between temperature at each route where species was seen and raster cells containing routes where the species was seen within a 5 degree radius
 # (if species was seen multiple times in a nearby cell, only count once)
@@ -495,6 +512,102 @@ bb_p75 %>%
   ggplot(aes(x = AOU, y = mean_mean_pearson_corr)) +
   geom_pointrange(aes(ymax = p95, ymin = p5)) 
 
-  
+#########################################
+##          climate velocity           ##
+#########################################
+library(VoCC)
 
-### NEED TO DIG INTO ISSUE WITH LAT LON DECIMAL POINTS
+## read in Berkeley Earth daily air temperature from 1966 onwards
+na <- stack("outputs/data-processed/BerkeleyEarth_1966_NorthAmerica.tif")
+
+## read in as array also
+na_arr = tiff::readTIFF("outputs/data-processed/BerkeleyEarth_1966_NorthAmerica.tif")
+
+## crop to 1980 onwards 
+## make date vector
+dates <- paste(rep(seq(1966, 2021), each = 365), ".", rep(seq(1:365), 62), sep = "")
+## get index of first day of 1980
+index = which(as.character(dates) == "1980.1")
+
+na_arr = na_arr[,,index:dim(na_arr)[3]]
+
+
+## calculate temporal trend and mean temp in each cell 
+n = dim(na_arr)[3]
+temp_trends = means = na_arr[,,1]
+x = 1
+while(x <= dim(na_arr)[1]) {
+  
+  y = 1
+  while(y <= dim(na_arr)[2]) {
+    
+    if(!is.nan(na_arr[x,y,1])) {
+      ## get time series
+      df = data.frame(temp = na_arr[x,y,], time = 1:n)
+      
+      ## fit regression
+      lm = lm(temp ~ time, data = df)
+      
+      ## save slope 
+      temp_trends[x,y] = lm$coefficients[2]
+      
+      ## save mean 
+      means[x,y] = mean(df$temp, na.rm = T)
+    }
+    y = y + 1
+  }
+  
+  print(x)
+  x = x + 1
+}
+
+## translate to deg C per year
+temp_trends = temp_trends*365
+
+## rasterize
+temp_trend_rast = raster(temp_trends, na)
+plot(temp_trend_rast)
+means_rast = raster(means, na)
+plot(means_rast)
+
+## calculate the spatial gradient from mean temperatures 
+spat_grad = spatGrad(means_rast)
+plot(spat_grad)
+
+## calculate climate velocity 
+cv = gVoCC(tempTrend = temp_trend_rast, spatGrad = spat_grad)
+plot(cv)
+
+## get latitudinal velocity component 
+cos_angle = cos(cv$voccAng)
+cv_lat = temp_trend_rast*cos_angle
+
+## units are degrees latitude/year
+## convert to km/y (approximately)
+cv_lat = cv_lat*110
+
+plot(cv_lat)
+mean(values(cv_lat), na.rm = T)
+
+hist(cv_lat)
+hist(shifts$slope*110)
+
+
+## calculate across the cardinal's range
+botw = vect("outputs/data-processed/BBS_BOTW.shp")
+
+## filter to cardinal 
+range = botw[which(botw$sci_name == "Cardinalis cardinalis"),]
+
+cv_lat = rast(cv_lat)
+
+crs(cv_lat) = crs(range) 
+
+test = mask(cv_lat, range)
+plot(test)
+
+mean(values(test), na.rm = T)
+
+shifts$slope[which(shifts$genus_sp == 'Cardinalis cardinalis' & shifts$range_edge == "leading")]*110
+
+

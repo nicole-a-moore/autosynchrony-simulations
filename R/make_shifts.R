@@ -26,7 +26,7 @@ ps <- c(0, 1)
 for(p in ps) {
   for(beta in betas) {
     ## call function to simulate range shifts 
-    simulate_range_shifts(p = p, beta = beta)
+    simulate_range_shifts(p = p, beta = beta, ncol = 10, nrow = 500)
   }
 }
 

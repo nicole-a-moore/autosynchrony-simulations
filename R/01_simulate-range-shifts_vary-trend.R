@@ -4,6 +4,8 @@
 
 simulate_range_shifts <- function(p,
                                   beta,
+                                  icc,
+                                  between_var,
                                   r = 1.2, # maximum intrinsic rate of increase 
                                   K = 100, # mean carrying capacity 
                                   d = 0.1, # proportion of offspring dispersing
@@ -13,8 +15,13 @@ simulate_range_shifts <- function(p,
                                   nrow, # number of rows in species range matrix 
                                   ncol, # number of columns in species range matrix
                                   path = "outputs/data-processed/range-shift-simulations", # set path
-                                  shift_rate = 0.1
+                                  shift_rate = 0.05
 ) {
+  
+  library(tidyverse)
+  library(raster)
+  library(terra)
+  select = dplyr::select
   
   r = 1.2 # maximum intrinsic rate of increase 
   K = 100 # mean carrying capacity 
@@ -22,10 +29,12 @@ simulate_range_shifts <- function(p,
   icp = 0.1 ## intraspecific competition parameter
   L = 2000 # number of time steps to simulate
   reps = 10 # number of replicates per combination of parameters
-  nrow=100 # number of rows in species range matrix 
-  ncol=10 # number of columns in species range matrix
+  nrow=105 # number of rows in species range matrix 
+  ncol=12 # number of columns in species range matrix
   path = "outputs/data-processed/range-shift-simulations" # set path
-  shift_rate = 0.05
+  shift_rate = 0.1
+  between_var = 0
+  icc = 1
   
   print("Starting!")
   
@@ -33,7 +42,7 @@ simulate_range_shifts <- function(p,
   source("R/functions/generate_noise.R")
   
   ## create folder for output 
-  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d)
+  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d, "fastcc")
   
   if(!dir.exists(path)) {
     dir.create(path, recursive = T)
@@ -77,16 +86,16 @@ simulate_range_shifts <- function(p,
         
         ## higher proportion dispersing = less pronounced effect of suitability gradient
         lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
-        lattice_N_it[(nrow/2+1):nrow,1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
-        lattice_N_it[1:(nrow/2),1:ncol,1] <- 0 ## start with population size = 0 in other half 
+        lattice_N_it[ceiling(nrow/2+1):nrow,1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
+        lattice_N_it[1:ceiling(nrow/2),1:ncol,1] <- 0 ## start with population size = 0 in other half 
         
         ## create temperature gradient 
-        ## position optimum temperature (20deg) conditions as row 75 on the lattice (Emax)
+        ## position optimum temperature (20deg) conditions as row 85 on the lattice (Emax)
         spat_grad = 0.2 #2.5*shift_rate ## spat grad
         temp_trend = spat_grad*shift_rate ## temporal trend 
         clim_velo = temp_trend/spat_grad
       
-        lattice_E_it[,1:ncol] = spat_grad*(1:nrow) + (20-spat_grad*75)
+        lattice_E_it[,1:ncol] = spat_grad*(1:nrow) + (20-spat_grad*85)
         
         ## replicate latitudinal gradient L times 
         lattice_E_it_array <- replicate(L, lattice_E_it)
@@ -100,7 +109,7 @@ simulate_range_shifts <- function(p,
         ## calculate ICC to measure similarity within groups 
         
         ## function to generate data with specific ICC 
-        generate_icc_data <- function(n_groups, n_per_group, icc, between_var = 1, mu = 0) {
+        generate_icc_data <- function(n_groups, n_per_group, icc, between_var, mu) {
           # Total number of observations
           N <- n_groups * n_per_group
           
@@ -129,8 +138,41 @@ simulate_range_shifts <- function(p,
           )
         }
         
+        ## calculate how many neighbourhoods to generate
+        ## convert to grid 
+        rast = rast(lattice_r)
+        values(rast) = 1:n_pops
+        
+        ## function to get 3x3 neighbourhood (center + 8 neighbors)
+        groups <- lapply(1:ncell(rast), function(cell) {
+          adj <- adjacent(rast, cells = cell, directions = 8, include = TRUE)
+          return(c(adj))
+        })
+        
+        
+        ## create matrix of right size
+        mat <- matrix(1:(nrow * ncol), nrow = nrow, byrow = TRUE)
+        
+        ## define stride (3x3 blocks)
+        block_size <- 3
+        
+        ## initialize list to store center indices
+        center_indices <- c()
+        
+        ## loop over non-overlapping 3x3 blocks
+        for (row in seq(2, nrow - 1, by = block_size)) {
+          for (col in seq(2, ncol - 1, by = block_size)) {
+            ## get index of center cell
+            center_idx <- mat[row, col]
+            center_indices <- c(center_indices, center_idx)
+          }
+        }
+        
         ## generate data with specific ICC 
-        trends = generate_icc_data(n_groups = 105, n_per_group = 9, icc = 1, mu = 0, between_var = 10)
+        trends = generate_icc_data(n_groups = length(center_indices), n_per_group = 9, 
+                                   icc = icc, ## within-neighbourhood similarity
+                                   mu = 0, ## mean value
+                                   between_var = between_var) ## between-neighbourhood variance
         
         ## set mean to equal temp_trend
         trends$y = trends$y - mean(trends$y, na.rm = TRUE) + temp_trend
@@ -152,43 +194,14 @@ simulate_range_shifts <- function(p,
           select(-group)
         
         ## calculate icc 
-        mod = irr::icc(df, model = "oneway", type = "agreement", unit = "single")
-        mod
-        
-        ## convert to grid 
-        r = rast(lattice_r)
-        values(r) = 1:n_pops
-        
-        ## function to get 3x3 neighbourhood (center + 8 neighbors)
-        groups <- lapply(1:ncell(r), function(cell) {
-          adj <- adjacent(r, cells = cell, directions = 8, include = TRUE)
-          return(c(adj))
-        })
-        
-       
-        # Create dummy matrix and convert to raster if needed
-        mat <- matrix(1:(nrow * ncol), nrow = nrow, byrow = TRUE)
-        
-        # Define stride (3x3 blocks)
-        block_size <- 3
-        
-        # Initialize list to store center indices
-        center_indices <- c()
-        
-        # Loop over non-overlapping 3x3 blocks
-        for (row in seq(2, nrow - 1, by = block_size)) {
-          for (col in seq(2, ncol - 1, by = block_size)) {
-            # Get linear index of center cell
-            center_idx <- mat[row, col]
-            center_indices <- c(center_indices, center_idx)
-          }
-        }
+        icc_star = irr::icc(trends, model = "oneway", type = "agreement", unit = "single")
+        icc_star$value
         
         ## filter to keep only non-overlapping 3x3 neighborhoods (i.e., 9 cells) 
         groups <- groups[which(sapply(groups, function(x) { return(x[1])}) %in% center_indices)]
         groups = do.call(rbind, groups)
         
-        ## make long 
+        ## make long dataframe 
         groups = as.data.frame(groups) %>%
           mutate(group = 1:nrow(.)) %>%
           pivot_longer(
@@ -209,18 +222,27 @@ simulate_range_shifts <- function(p,
         
         trends$cell_num = groups$cell_num
         
+        ## make raster containing correct trends for each neighbourhood
         for(i in 1:nrow(trends)) {
-          r[trends$cell_num[i]] = trends$trend[i]
+          values(rast)[trends$cell_num[i]] = trends$trend[i]
         }
+        #plot(rast)
         
-        plot(r)
+        ## convert raster to matrix of trends 
+        lattice_trends <- as.array(rast)[,,1]
         
-        ## after stable period of 500 time steps, shift temperatures by shift_rate 
-        for(time in 501:L) {
-          lattice_E_it_array[,1:ncol,time] = (spat_grad*(1:nrow) + (20-spat_grad*75)) + temp_trend*(time-500)
+        ## after stable period of 500 time steps, shift temperatures by trend 
+        for(row in 1:nrow) {
+          for(col in 1:ncol) {
+            for(time in 501:2000) {
+              lattice_E_it_array[row,col,time] = (spat_grad*row + (20-spat_grad*85)) + lattice_trends[row,col]*(time-500)
+            }
+          }
         }
-        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,501])
-        
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,500]) ## at end of stable period, all are same
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,2000]) ## diff trends lead to diff values at end of simulation
+        #plot(x = 1:2000, y = lattice_E_it_array[1,7,]) ## across space, trends differ :-)
+         
         ## create noise time series for each cell, L time steps long
         lattice_ac_it = array(dim = c(nrow,ncol,L))
         
@@ -264,16 +286,10 @@ simulate_range_shifts <- function(p,
         }
         
         ## make tpc: (from Huey suboptimal is optimal)
-        ## plot a curve!
         r_max = r + 0.25 ## max suitability
         alpha_tpc = 0.3 ## rise rate steepness
         beta_tpc = 0.3 ## decline rate steepness
         Trmax = 20
-        
-        # r_max = r + 2 ## max suitability
-        # alpha_tpc = 0.01 ## rise rate steepness
-        # beta_tpc = 0.01 ## decline rate steepness
-        # Trmax = 20
         
         # plot the curve
         # range of body temps
@@ -283,60 +299,59 @@ simulate_range_shifts <- function(p,
         exponent = -exp(beta_tpc*(Tb-Trmax)-8)-alpha_tpc*(Tb-Trmax)^2
         wb = r_max*exp(1)^exponent - 0.25
 
+        # data.frame(r = wb, temperature = Tb) %>%
+        #  ggplot(aes(x = temperature, y = r)) +
+        #  geom_line() +
+        #   geom_hline(yintercept = 0, colour = "red") +
+        #   theme_bw()
+
+        ## now, we are focusing on what happens at the leading edge 
+        ## we can't simulate a really latitudinally-broad range because it would take a long time, but we want to avoid suitability becoming negative (i.e., trailing edge catching up to leading edge) at the leading edge during the simulation
+        ## let's modify the tpc so that growth rate plateaus at temperatures hotter than Topt
+        
+        wb[Tb >= Trmax] = r_max - 0.25
+        
         data.frame(r = wb, temperature = Tb) %>%
-         ggplot(aes(x = temperature, y = r)) +
-         geom_line() +
+          ggplot(aes(x = temperature, y = r)) +
+          geom_line() +
           geom_hline(yintercept = 0, colour = "red") +
           theme_bw()
-
-        # ## let noise affect r for each cell in the lattice
-        # lattice_noise_array = (lattice_E_it_array + lattice_ac_it*3) ## scale sd to 3
-        # #plot(x = 1:nrow, y = lattice_noise_array[1:nrow,1,700])
-        # #plot(x = 1:2000, y = lattice_r_array[75,1,1:2000])
-        # 
-        # # max(lattice_noise_array[75,1,1:500])
-        # # min(lattice_noise_array[75,1,1:500])
-        #  
-        # ## use tpc to translate temps into suitability
-        # lattice_r_array = lattice_noise_array
-        # lattice_r_array = -exp(beta_tpc*(lattice_noise_array-Trmax)-8)-alpha_tpc*(lattice_noise_array-Trmax)^2
-        # lattice_r_array = r_max*exp(1)^lattice_r_array - 2
-        # #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1, 700])
-        # #plot(x = 1:L, y = lattice_r_array[50,1,1:L])
         
         ## use tpc to translate temperature to growth rate 
         lattice_r_array = lattice_E_it_array
         lattice_r_array = -exp(beta_tpc*(lattice_r_array-Trmax)-8)-alpha_tpc*(lattice_r_array-Trmax)^2
         lattice_r_array = r_max*exp(1)^lattice_r_array - 0.25
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
+        lattice_r_array[which(lattice_E_it_array >= Trmax)] = r_max - 0.25
+        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,600])
         
         ## add noise to growth rate
         lattice_r_array = lattice_r_array + lattice_ac_it 
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
+        #plot(x = 1:2000, y = lattice_r_array[1,1,1:2000])
         
         ## save environmental array as raster
-        filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+        filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", 
+                           rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
                            d, "_icp", icp, "_L", L, ".tif")
         writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
         
-        ## measure clim velocity after variation was added
-        rast = raster::brick(lattice_noise_array[,,501:L],xmn = 0, xmx = 10, ymn = 0, ymx = 100)
-        ttrend = tempTrend(r = rast, th = 0.25*nlayers(rast)) ## set minimum # obs. to 1/4 time series length
-        #plot(ttrend)
-        temp_trend_est =mean(values(ttrend$slpTrends))
-        #0.025
-        
-        ## use function to calculate spatial gradient in mean daily air temperature for each location:
-        spgrad = spatGrad(r = rast, projected = TRUE) ## our raster is projected to a coordinate system
-        #plot(spgrad)
-        spat_grad_est = mean(values(spgrad$Grad))
-        ## 0.257
-        
-        ## calculate gradient based climate velocity:
-        gvocc = gVoCC(tempTrend = ttrend, spatGrad = spgrad)
-        #plot(gvocc)
-        clim_velo_est = mean(values(gvocc$voccMag))
-        ## 0.102
+        # ## measure clim velocity after variation was added
+        # rast = raster::brick(lattice_r_array[,,501:L],xmn = 0, xmx = 10, ymn = 0, ymx = 100)
+        # ttrend = tempTrend(r = rast, th = 0.25*nlayers(rast)) ## set minimum # obs. to 1/4 time series length
+        # #plot(ttrend)
+        # temp_trend_est =mean(values(ttrend$slpTrends))
+        # #0.025
+        # 
+        # ## use function to calculate spatial gradient in mean daily air temperature for each location:
+        # spgrad = spatGrad(r = rast, projected = TRUE) ## our raster is projected to a coordinate system
+        # #plot(spgrad)
+        # spat_grad_est = mean(values(spgrad$Grad))
+        # ## 0.257
+        # 
+        # ## calculate gradient based climate velocity:
+        # gvocc = gVoCC(tempTrend = ttrend, spatGrad = spgrad)
+        # #plot(gvocc)
+        # clim_velo_est = mean(values(gvocc$voccMag))
+        # ## 0.102
         
         ## get rid of unnecessary objects 
         rm("noise", "diffs","lattice_ac_it", "ts_all", "lattice_E_it_array")
@@ -351,16 +366,19 @@ simulate_range_shifts <- function(p,
       df <- expand.grid(y = 1:nrow, x = 1:ncol) 
       pts <- as.data.frame(transform(df, z = matrix[as.matrix(df)]))
       pts$x = pts$x - 0.5
-      pts$y = 100 - (pts$y - 0.5)
+      pts$y = nrow - (pts$y - 0.5)
       pts = rename(pts, "Nt" = "z")
       pts$t = t
       pts$rep = rep
       pts$p = p
       pts$beta = beta
       pts$shift_rate = shift_rate
-      pts$temp_trend_est = temp_trend_est
-      pts$spat_grad_est = spat_grad_est
-      pts$clim_velo_est = clim_velo_est
+      pts$mean_temp_trend = temp_trend
+      pts$icc = icc_star$value
+      pts$between_var = between_var
+      # pts$temp_trend_est = temp_trend_est
+      # pts$spat_grad_est = spat_grad_est
+      # pts$clim_velo_est = clim_velo_est
       pts$N_global = sum(lattice_N_it[,,t])
       pts$N_ext_local = length(which(lattice_N_it[,,t] == 0))
       

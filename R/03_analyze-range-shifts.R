@@ -158,7 +158,7 @@ plot_shift_params_together <- function(all_ranges) {
       
       params = all_ranges_sub %>%
         filter(Nt != 0) %>%
-        group_by(t) %>%
+        group_by(t, shift_rate) %>%
         summarize(max_y = max(y), 
                   q95_y = quantile(y, c(0.95)),
                   min_y = min(y),
@@ -168,14 +168,14 @@ plot_shift_params_together <- function(all_ranges) {
       
       params2 = all_ranges_sub %>%
         filter(Nt != 0) %>% 
-        group_by(t) %>%
+        group_by(t, shift_rate) %>%
         arrange(-y) %>%
         slice(1:10) %>%
         summarize(mean_max_y = mean(y))
       
       params3 = all_ranges_sub %>%
         filter(Nt != 0) %>% 
-        group_by(t) %>%
+        group_by(t, shift_rate) %>%
         arrange(y) %>%
         slice(1:10) %>%
         summarize(mean_min_y = mean(y))
@@ -185,12 +185,12 @@ plot_shift_params_together <- function(all_ranges) {
       
       params4 = all_ranges_sub %>%
         filter(est == 1) %>%
-        group_by(t) %>%
+        group_by(t, shift_rate) %>%
         filter(y <= mid_occ_lat) %>%
         summarize(est_edge = quantile(y, c(0.05), na.rm = T))
       params5 = all_ranges_sub %>%
         filter(ext == 1) %>%
-        group_by(t) %>%
+        group_by(t, shift_rate) %>%
         filter(y > mid_occ_lat) %>%
         summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
       
@@ -212,10 +212,10 @@ plot_shift_params_together <- function(all_ranges) {
                                                        "ext_edge", "est_edge")) %>%
     filter(parameter %in% c("max_y", "min_y", "abd_centroid")) %>% 
     mutate(period = paste(period, parameter)) %>%
-    mutate(group = paste(beta, p, parameter), 
-           colour = paste(p, beta, sep = "_")) %>% 
+    mutate(group = paste(beta, p, parameter, shift_rate), 
+           colour = paste(p, beta, sep = "_")) %>%
     ggplot(aes(x = t, y = measurement, colour = colour, group = group)) +
-    geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt)) +
+    geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
     geom_line() + 
     theme_bw() +
     #geom_smooth(method = "lm", aes(group = period)) +

@@ -24,7 +24,7 @@ for(p in c(0, 1)) {
     ## for each rep
     for(rep in 1:length(files)) {
       cur_files = list.files(files[rep], full.names = T)
-      r = str_split_fixed(files[rep], "/rep", 2)[,2]
+      r = str_split_fixed(files[rep], "/wt_rep", 2)[,2]
       
       all_ranges = c()
       i=1
@@ -33,7 +33,9 @@ for(p in c(0, 1)) {
         print(i)
         i = i + 1
       }
-      write.csv(all_ranges, paste0("outputs/data-processed/range-shift-simulations/all-ranges_leading-edge/range-shifts_rep", r, "_p", p, "_b", beta, "_icp", icp, "_d", d),
+
+      write.csv(all_ranges, 
+                paste0("outputs/data-processed/range-shift-simulations/all-ranges_leading-edge/range-shifts_rep", r, "_p", p, "_b", beta, "_icp", icp, "_d", d),
                 row.names = FALSE)
     }
     

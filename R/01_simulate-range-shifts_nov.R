@@ -16,7 +16,11 @@ simulate_range_shifts <- function(p,
                                   shift_rate = 100/1000
 ) {
   
-  r = 1.2 # maximum intrinsic rate of increase 
+  library(tidyverse)
+  library(terra)
+  library(raster)
+  
+  r = 2 # maximum intrinsic rate of increase 
   K = 100 # mean carrying capacity 
   d = 0.1 # proportion of offspring dispersing
   icp = 0.1 ## intraspecific competition parameter
@@ -26,6 +30,7 @@ simulate_range_shifts <- function(p,
   ncol=10 # number of columns in species range matrix
   path = "outputs/data-processed/range-shift-simulations" # set path
   shift_rate = 0.2
+  rep=1
   
   print("Starting!")
   
@@ -47,7 +52,7 @@ simulate_range_shifts <- function(p,
   ## shape is sigmoidal, as was done in Mustin et al. 2013
   h = 20 ## half-saturation constant; defines the distance at which Eit = 0.5
   s = -3 ## shape parameter; defines direction (negative = negative slope) and shape (s > 1 gives signmoid)
-  Emax = 1 ## set Emax to 1
+  Emax = r ## set Emax to max r
   
   ## count number of populations:
   n_pops = nrow*ncol # number of grid cells
@@ -83,9 +88,9 @@ simulate_range_shifts <- function(p,
         lattice_N_it[1:(nrow/6),1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
         lattice_N_it[(nrow/6):nrow,1:ncol,1] <- 0 ## start with population size = 0 in other half 
         
-        ## position optimum climatic conditions as row 25 on the lattice (Emax)
-        opt = 25
-        lattice_E_it[opt,1:10] = Emax*2
+        ## position optimum climatic conditions as row 1 on the lattice (Emax)
+        opt = 1
+        lattice_E_it[opt,1:10] = Emax
         
         # ## assume that conditions decline sigmoidally away from this optimum in both directions
         # lattice_E_it[1:(opt-1),] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) 
@@ -93,10 +98,9 @@ simulate_range_shifts <- function(p,
         # #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
         
         ## assume that conditions decline sigmoidally away from this optimum in one direction
-        lattice_E_it[1:(opt-1),] = Emax*2
-        lattice_E_it[(opt+1):nrow,] = Emax*2*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
+        lattice_E_it[1:opt,] = Emax
+        lattice_E_it[(opt+1):nrow,] = Emax*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
         #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
-
 
         ## replicate latitudinal gradient L times 
         lattice_E_it_array <- replicate(L, lattice_E_it)
@@ -113,30 +117,10 @@ simulate_range_shifts <- function(p,
             
             ## shift optimum by "step"
             ## shift the optimum climatic conditions on the lattice
-            lattice_E_it_array[new_opt,,(q+500)] = Emax*2
-            # ## assume that conditions decline sigmoidally away from this optimum in both directions
-            # lattice_E_it_array[1:((new_opt)-1),,(q+500)] = Emax*2*rev((1:((new_opt)-1))^s/ 
-            #                                                             ((1:((new_opt)-1))^s + h^s))
-            # lattice_E_it_array[((new_opt)+1):nrow,,(q+500)] = Emax*2*((1:nrow)^s / 
-            #                                                             ((1:nrow)^s + h^s))[1:(nrow-(new_opt))] 
             ## assume that conditions decline sigmoidally away from this optimum in one directions
-            lattice_E_it_array[1:((new_opt)-1),,(q+500)] = Emax*2
-            lattice_E_it_array[((new_opt)+1):nrow,,(q+500)] = Emax*2*((1:nrow)^s /
+            lattice_E_it_array[1:new_opt,,(q+500)] = Emax
+            lattice_E_it_array[(new_opt+1):nrow,,(q+500)] = Emax*((1:nrow)^s /
                                                                         ((1:nrow)^s + h^s))[1:(nrow-(new_opt))]
-            # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
-          }
-          else if(new_opt == (nrow - 1)) {
-            step = floor(shift_rate*q)
-            new_opt = opt + step
-            
-            ## shift the optimum climatic conditions on the lattice
-            lattice_E_it_array[new_opt,,(q+500)] = Emax*2
-            # ## assume that conditions decline sigmoidally away from this optimum in both directions
-            # lattice_E_it_array[1:(new_opt - 1),,(q+500)] = (Emax*2*rev((1:((new_opt)-1))^s/ 
-            #                                                              ((1:((new_opt)-1))^s + h^s)))
-            ## assume that conditions decline sigmoidally away from this optimum in one directions
-            lattice_E_it_array[1:(new_opt - 1),,(q+500)] = Emax*2
-            
             # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
           }
           ## otherwise
@@ -149,7 +133,7 @@ simulate_range_shifts <- function(p,
             # lattice_E_it_array[1:nrow,,(q+500)] = (Emax*2*rev((1:((new_opt)))^s/ 
             #                                                     ((1:((new_opt)))^s + h^s)))[1:nrow]
             ## assume that conditions decline sigmoidally away from this optimum in one directions
-            lattice_E_it_array[1:nrow,,(q+500)] = Emax*2
+            lattice_E_it_array[1:nrow,,(q+500)] = Emax
             # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,(q+500)])
           }
           

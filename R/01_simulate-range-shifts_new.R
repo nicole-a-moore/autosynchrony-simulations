@@ -16,15 +16,15 @@ simulate_range_shifts <- function(p,
                                   shift_rate = 0.1
 ) {
   
-  r = 1.2 # maximum intrinsic rate of increase 
+  r = 2 # maximum intrinsic rate of increase 
   K = 100 # mean carrying capacity 
   d = 0.1 # proportion of offspring dispersing
   icp = 0.1 ## intraspecific competition parameter
   L = 2000 # number of time steps to simulate
   reps = 10 # number of replicates per combination of parameters
-  nrow=100 # number of rows in species range matrix 
+  nrow=300 # number of rows in species range matrix 
   ncol=10 # number of columns in species range matrix
-  path = "outputs/data-processed/range-shift-simulations" # set path
+  path = "outputs/data-processed/range-shift-simulations_TPC" # set path
   shift_rate = 0.05
   
   print("Starting!")
@@ -77,16 +77,20 @@ simulate_range_shifts <- function(p,
         
         ## higher proportion dispersing = less pronounced effect of suitability gradient
         lattice_r[1:nrow,1:ncol] <- r ## start with growth rate = max growth rate 
-        lattice_N_it[(nrow/2+1):nrow,1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
-        lattice_N_it[1:(nrow/2),1:ncol,1] <- 0 ## start with population size = 0 in other half 
+        lattice_N_it[1:(nrow/2),1:ncol,1] <- K/2 ## start with population size = carrying capacity / 2 in 1/2 of grid
+        lattice_N_it[(nrow/2):nrow,1:ncol,1] <- 0 ## start with population size = 0 in other half 
         
         ## create temperature gradient 
-        ## position optimum temperature (20deg) conditions as row 75 on the lattice (Emax)
-        spat_grad = 0.2 #2.5*shift_rate ## spat grad
+        ## position optimum temperature (20deg) conditions as row 25 on the lattice (Emax)
+        spat_grad = 0.02 #2.5*shift_rate ## spat grad
         temp_trend = spat_grad*shift_rate ## temporal trend 
         clim_velo = temp_trend/spat_grad
-      
-        lattice_E_it[,1:ncol] = spat_grad*(1:nrow) + (20-spat_grad*75)
+        
+        ## compute offset so that value at row 25 equals 20
+        offset <- 20 - (25 * -spat_grad)
+        
+        ## create gradient
+        lattice_E_it[, 1:ncol] <- (1:nrow * -spat_grad + offset)
         
         ## replicate latitudinal gradient L times 
         lattice_E_it_array <- replicate(L, lattice_E_it)
@@ -94,9 +98,9 @@ simulate_range_shifts <- function(p,
         
         ## after stable period of 500 time steps, shift temperatures by shift_rate 
         for(time in 501:L) {
-          lattice_E_it_array[,1:ncol,time] = (spat_grad*(1:nrow) + (20-spat_grad*75)) + temp_trend*(time-500)
+          lattice_E_it_array[,1:ncol,time] = (1:nrow * -spat_grad + offset) + temp_trend*(time-500)
         }
-        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,501])
+        #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,1501])
         
         ## create noise time series for each cell, L time steps long
         lattice_ac_it = array(dim = c(nrow,ncol,L))
@@ -142,15 +146,10 @@ simulate_range_shifts <- function(p,
         
         ## make tpc: (from Huey suboptimal is optimal)
         ## plot a curve!
-        r_max = r + 0.25 ## max suitability
-        alpha_tpc = 0.3 ## rise rate steepness
-        beta_tpc = 0.3 ## decline rate steepness
+        r_max = r + 2 ## max suitability
+        alpha_tpc = 0.1 ## rise rate steepness
+        beta_tpc = 0.1 ## decline rate steepness
         Trmax = 20
-        
-        # r_max = r + 2 ## max suitability
-        # alpha_tpc = 0.01 ## rise rate steepness
-        # beta_tpc = 0.01 ## decline rate steepness
-        # Trmax = 20
         
         # plot the curve
         # range of body temps
@@ -158,50 +157,63 @@ simulate_range_shifts <- function(p,
 
         ## calculate fitness
         exponent = -exp(beta_tpc*(Tb-Trmax)-8)-alpha_tpc*(Tb-Trmax)^2
-        wb = r_max*exp(1)^exponent - 0.25
+        wb = r_max*exp(1)^exponent  - 2
 
         data.frame(r = wb, temperature = Tb) %>%
          ggplot(aes(x = temperature, y = r)) +
          geom_line() +
           geom_hline(yintercept = 0, colour = "red") +
           theme_bw()
+        
+        ## make it a leading edge 
+        wb[Tb > Trmax] = r_max -2
+        
+        data.frame(r = wb, temperature = Tb) %>%
+          ggplot(aes(x = temperature, y = r)) +
+          geom_line() +
+          geom_hline(yintercept = 0, colour = "red") +
+          theme_bw()
 
-        # ## let noise affect r for each cell in the lattice
-        # lattice_noise_array = (lattice_E_it_array + lattice_ac_it*3) ## scale sd to 3
-        # #plot(x = 1:nrow, y = lattice_noise_array[1:nrow,1,700])
-        # #plot(x = 1:2000, y = lattice_r_array[75,1,1:2000])
+        ## let noise affect r for each cell in the lattice
+        lattice_noise_array = (lattice_E_it_array + lattice_ac_it)
+        # plot(x = 1:nrow, y = lattice_noise_array[1:nrow,1,700])
+
+        # max(lattice_noise_array[25,1,1:500])
+        # min(lattice_noise_array[25,1,1:500])
+
+        ## use tpc to translate temps into suitability
+        lattice_r_array = lattice_noise_array
+        lattice_r_array = -exp(beta_tpc*(lattice_noise_array-Trmax)-8)-alpha_tpc*(lattice_noise_array-Trmax)^2
+        lattice_r_array = r_max*exp(1)^lattice_r_array - 2
+        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1, 700])
+        #plot(x = 1:L, y = lattice_r_array[50,1,1:L])
+        
+        ## make it a leading edge 
+        lattice_r_array[lattice_E_it_array > Trmax] = r_max - 2
+        
+        # ## use tpc to translate temperature to growth rate 
+        # lattice_r_array = lattice_E_it_array
+        # lattice_r_array = -exp(beta_tpc*(lattice_r_array-Trmax)-8)-alpha_tpc*(lattice_r_array-Trmax)^2
+        # lattice_r_array = r_max*exp(1)^lattice_r_array - 0.25
+        # #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
         # 
-        # # max(lattice_noise_array[75,1,1:500])
-        # # min(lattice_noise_array[75,1,1:500])
-        #  
-        # ## use tpc to translate temps into suitability
-        # lattice_r_array = lattice_noise_array
-        # lattice_r_array = -exp(beta_tpc*(lattice_noise_array-Trmax)-8)-alpha_tpc*(lattice_noise_array-Trmax)^2
-        # lattice_r_array = r_max*exp(1)^lattice_r_array - 2
-        # #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1, 700])
-        # #plot(x = 1:L, y = lattice_r_array[50,1,1:L])
-        
-        ## use tpc to translate temperature to growth rate 
-        lattice_r_array = lattice_E_it_array
-        lattice_r_array = -exp(beta_tpc*(lattice_r_array-Trmax)-8)-alpha_tpc*(lattice_r_array-Trmax)^2
-        lattice_r_array = r_max*exp(1)^lattice_r_array - 0.25
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
-        
-        ## add noise to growth rate
-        lattice_r_array = lattice_r_array + lattice_ac_it 
-        #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
-        
+        # ## add noise to growth rate
+        # lattice_r_array = lattice_r_array + lattice_ac_it 
+        # #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
+ 
         ## save environmental array as raster
         filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
                            d, "_icp", icp, "_L", L, ".tif")
         writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
         
         ## measure clim velocity after variation was added
-        rast = raster::brick(lattice_noise_array[,,501:L],xmn = 0, xmx = 10, ymn = 0, ymx = 100)
+        rast = raster::brick(lattice_noise_array[,,501:L], xmn = 0, xmx = 10, ymn = 0, ymx = 300)
         ttrend = tempTrend(r = rast, th = 0.25*nlayers(rast)) ## set minimum # obs. to 1/4 time series length
         #plot(ttrend)
         temp_trend_est =mean(values(ttrend$slpTrends))
         #0.025
+        
+        ## see how much variation there is in temp trend 
         
         ## use function to calculate spatial gradient in mean daily air temperature for each location:
         spgrad = spatGrad(r = rast, projected = TRUE) ## our raster is projected to a coordinate system
@@ -214,6 +226,15 @@ simulate_range_shifts <- function(p,
         #plot(gvocc)
         clim_velo_est = mean(values(gvocc$voccMag))
         ## 0.102
+        
+        ## get latitudinal velocity component 
+        cos_angle = cos(gvocc$voccAng)
+        lat_velo = gvocc$voccMag*cos_angle
+        #plot(lat_velo)
+        #plot(lat_velo < 0)
+        
+        ## okay - there are negative local velocities, just like in Berkeley Earth 
+        sd(values(lat_velo))
         
         ## get rid of unnecessary objects 
         rm("noise", "diffs","lattice_ac_it", "ts_all", "lattice_E_it_array")
@@ -228,7 +249,7 @@ simulate_range_shifts <- function(p,
       df <- expand.grid(y = 1:nrow, x = 1:ncol) 
       pts <- as.data.frame(transform(df, z = matrix[as.matrix(df)]))
       pts$x = pts$x - 0.5
-      pts$y = 100 - (pts$y - 0.5)
+      pts$y = pts$y - 0.5
       pts = rename(pts, "Nt" = "z")
       pts$t = t
       pts$rep = rep

@@ -16,9 +16,9 @@ cur_all <- read.csv("outputs/data-processed/BBS_all.csv")
 sp <- read.csv("data-raw/BBS/SpeciesList.csv")
 nrow(sp) == length(unique(sp$English_Common_Name)) ## 1 row per sp
 
-## filter to songbirds
-sp = sp[which(sp$Order == "Passeriformes"),]
-length(unique(sp$AOU)) # 354
+## filter to landbirds
+sp = sp[which(!sp$Order %in% c("Anseriformes", "Charadriiformes", "Galliformes", "Pelecaniformes", "Suliformes", "Gaviiformes", "Ciconiiformes", "Podicipediformes", "Gruiformes", "Phaethontiformes", "Procellariiformes")),]
+length(unique(sp$AOU)) # 500
 
 ## get rid of hybrids 
 sp = filter(sp, !str_detect(sp$Species, " x "))
@@ -27,7 +27,7 @@ sp = filter(sp, !str_detect(sp$Species, " x "))
 sp = filter(sp, !str_detect(sp$English_Common_Name, "unid."))
 
 cur_all = cur_all[which(cur_all$AOU %in% sp$AOU),]
-length(unique(cur_all$AOU)) # 309
+length(unique(cur_all$AOU)) # 440
 
 ## read in study area extent
 extent = vect("outputs/data-processed/bbs_study-extent.shp")
@@ -62,7 +62,7 @@ sp$old_AOU = NA
 
 sp <- rbind(sp, subsp)
 
-length(unique(sp$AOU)) ## 303 species after regrouping 
+length(unique(sp$AOU)) ## 433 species after regrouping 
 
 key = select(sp, old_AOU, AOU) %>%
   filter(!is.na(old_AOU))
@@ -81,7 +81,7 @@ cur_all <- rbind(cur_all, new_data)
 ## make sure we have the right number of species 
 length(unique(cur_all$AOU)) == length(unique(sp$AOU))
 
-nrow(cur_all)
+nrow(cur_all) ## 9306792
 
 ## group by species, route, and year and sum abundance to consolidate abundance counts within a species 
 cur_all <- cur_all %>%
@@ -117,7 +117,7 @@ bbs_clean = cur_all %>%
   mutate(TotalAbd = ifelse(is.na(TotalAbd), 0, TotalAbd))   
 
 length(which(is.na(bbs_clean$TotalAbd))) ## 0 NA
-length(which(bbs_clean$TotalAbd == 0)) ## 33045577 zeros
+length(which(bbs_clean$TotalAbd == 0)) ## 49212413 zeros
 
 ## add NA for missed years that each route wasn't sampled 
 year_key = bbs_clean %>% 
@@ -139,16 +139,16 @@ bbs_clean = left_join(na_key, bbs_clean) %>%
   tidyr::fill(., Route, CountryNum, StateNum, RouteDataID, RPID, RouteName, Latitude,
               Longitude, AOU, .direction = "updown") %>% select(-code)
   
-length(which(bbs_clean$TotalAbd == 0)) ## 33045577 zeros
+length(which(bbs_clean$TotalAbd == 0)) ## 49212413 zeros
 length(which(is.na(bbs_clean$TotalAbd))) ## 44913 NAs
 
 ## save
-write.csv(bbs_clean, "outputs/data-processed/bbs_songbirds_with_absence.csv", row.names = FALSE)
+write.csv(bbs_clean, "outputs/data-processed/bbs_landbirds_with_absence.csv", row.names = FALSE)
 
 ####################################################
 ##      filter species by inclusion criteria      ##
 ####################################################
-bbs_clean <- read.csv("outputs/data-processed/bbs_songbirds_with_absence.csv")
+bbs_clean <- read.csv("outputs/data-processed/bbs_landbirds_with_absence.csv")
 
 ## get rid of species with:
 ## - fewer than 50 occurrences 
@@ -165,7 +165,7 @@ bbs_key = bbs_clean %>%
   filter(n_ind >= 50) %>%
   select(-n_ind)
 
-length(unique(bbs_key$AOU)) ## 287 species remain
+length(unique(bbs_key$AOU)) ## 393 species remain
 
 sp_to_keep = unique(bbs_key$AOU)
 
@@ -179,7 +179,7 @@ bbs_key = bbs_clean %>%
   select(-n_years)
 
 sp_to_keep <- sp_to_keep[which(sp_to_keep %in% bbs_key$AOU)]
-length(unique(sp_to_keep)) ## 286 species remain
+length(unique(sp_to_keep)) ## 391 species remain
 
 ## that are not present across at least 10 routes
 bbs_key = bbs_clean %>%
@@ -191,7 +191,7 @@ bbs_key = bbs_clean %>%
   select(-n_routes)
 
 sp_to_keep <- sp_to_keep[which(sp_to_keep %in% bbs_key$AOU)]
-length(unique(sp_to_keep)) ## 270 species remain
+length(unique(sp_to_keep)) ## 366 species remain
 
 ## GET RID OF SITES 
 ## remove sites with only 1 year sampled 
@@ -214,12 +214,17 @@ name_key = select(sp, AOU, genus_sp) %>%
 bbs_clean = left_join(bbs_clean, name_key)
 
 ## stats:
-length(unique(bbs_clean$genus_sp)) ## 270 species
+length(unique(bbs_clean$genus_sp)) ## 366 species
 length(unique(bbs_clean$route)) ## 5141 routes
 
 ## save 
 write.csv(bbs_clean, "outputs/data-processed/bbs_clean-subset.csv", row.names = F)
   
+
+
+
+##### garbage
+
 ## read in Table 1 list from rushing et all
 rushing = read.csv("data-raw/Rushing_et_al_2020_Table1.csv")
 

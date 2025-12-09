@@ -20,6 +20,7 @@ for(p in c(0, 1)) {
     files = files[!str_detect(files, "dispersal")]
     files = list.files(files, full.names = T)
     
+    files = files[1]
     ## for each rep
     for(rep in 1:length(files)) {
       cur_files = list.files(files[rep], full.names = T)
@@ -32,7 +33,7 @@ for(p in c(0, 1)) {
         print(i)
         i = i + 1
       }
-      write.csv(all_ranges, paste0("outputs/data-processed/range-shift-simulations/all-ranges/range-shifts_rep", r, "_p", p, "_b", beta, "_icp", icp, "_d", d),
+      write.csv(all_ranges, paste0("outputs/data-processed/range-shift-simulations/all-ranges_leading-edge/range-shifts_rep", r, "_p", p, "_b", beta, "_icp", icp, "_d", d),
                 row.names = FALSE)
     }
     

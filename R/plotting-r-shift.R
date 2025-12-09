@@ -53,20 +53,22 @@ r_df %>%
 
 
 ## try with an env grid
-env_grid = rast("outputs/data-processed/env-grids/range-shift-grid1_p1_beta1_r1.2_K100_d0.1_icp0.1_L2000.tif")
+env_grid = rast("outputs/data-processed/env-grids/range-shift-grid1_p0_beta0_r1.2_K100_d0.1_icp0.1_L2000.tif")
 
 array = as.array(env_grid)
+
+plot(x = 1:nrow, y = array[1,1, 1])
 
 # plot mean growth rate at latitude L over moving windows
 for(t in 50:1950) {
   if(t == 50) {
-    r_df = data.frame(t = t, lat = 1:100,
-                      r = sapply(1:100, FUN = function(x) { mean(array[x,1:10,(t-49):(t+49)]) }))
+    r_df = data.frame(t = t, lat = 1:300,
+                      r = sapply(1:300, FUN = function(x) { mean(array[x,1:10,(t-49):(t+49)]) }))
   }
   else {
     r_df = rbind(r_df,
-               data.frame(t = t, lat = 1:100,
-                          r = sapply(1:100, FUN = function(x) { mean(array[x,1:10,(t-49):(t+49)]) })))
+               data.frame(t = t, lat = 1:300,
+                          r = sapply(1:300, FUN = function(x) { mean(array[x,1:10,(t-49):(t+49)]) })))
   }
   
 }
@@ -75,7 +77,7 @@ for(t in 50:1950) {
 ## apply threshold and calculate 5th and 95th percentiles
 r_df <- r_df %>%
   group_by(t) %>%
-  mutate(p95 = quantile(.$lat[which(r >= 0)], 0.95),
+  mutate(p95 = quantile(.$lat[which(r >= 1)], 0.95),
          p5 = quantile(.$lat[which(r >= 0)], 0.05),
          peak_r = mean(.$lat[which(r == max(r))])) %>%
   ungroup()
@@ -113,11 +115,11 @@ params %>%
   theme_bw() +
   #geom_smooth(method = "lm", aes(group = period)) +
   scale_x_continuous(limits = c(0, 1500)) +
-  scale_y_continuous(limits = c(0, 100)) +
+  scale_y_continuous(limits = c(0, 300)) +
   labs(x = "Time", y = "Latitude", colour = "Range edge") +
-  geom_line(data = r_df, inherit.aes = F, aes(x = t, y = 100 - peak_r)) +
-  geom_line(data = r_df, inherit.aes = F, aes(x = t, y = 100 - p95)) +
-  geom_line(data = r_df, inherit.aes = F, aes(x = t, y = 100 - p5)) 
+  #geom_line(data = r_df, inherit.aes = F, aes(x = t, y = peak_r)) +
+  geom_line(data = r_df, inherit.aes = F, aes(x = t, y = p95)) +
+  geom_line(data = r_df, inherit.aes = F, aes(x = t, y = p5)) 
 
 ## range edge over time across latitude: estimate yearly from bbs surveys
 ## change in r over time: project suitability using temperature (+ precipitation) at a daily scale and measure change in latitude of the 95th and 5th percentile of cells above x threshold in suitability 

@@ -83,7 +83,7 @@ calculate_shift_params <- function(all_ranges) {
         gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
                                                            "mean_max_y", "mean_min_y", "abd_centroid", 
                                                            "ext_edge", "est_edge")) %>%
-        filter(parameter %in% c("q5_y", "q95_y", "abd_centroid")) %>% 
+        filter(parameter %in% c("min_y", "q95_y", "abd_centroid")) %>% 
         mutate(period = paste(period, parameter)) %>%
         ggplot(aes(x = t, y = measurement, colour = parameter)) +
         geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt)) +
@@ -91,7 +91,7 @@ calculate_shift_params <- function(all_ranges) {
         theme_bw() +
         #geom_smooth(method = "lm", aes(group = period)) +
         scale_x_continuous(limits = c(0, 2000)) +
-        scale_y_continuous(limits = c(0, 100)) +
+        scale_y_continuous(limits = c(0, 300)) +
         labs(x = "Time", y = "Latitude", colour = "Range edge")
       
       plot2 = params %>%
@@ -146,8 +146,8 @@ plot_shift_params_together <- function(all_ranges) {
   ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
   
   ## get ps and betas
-  ps = c(0,1)
-  betas = c(0,1)
+  ps = unique(all_ranges$p)
+  betas = unique(all_ranges$beta)
   rep = unique(all_ranges$rep)
   params_all <- c()
   
@@ -202,8 +202,7 @@ plot_shift_params_together <- function(all_ranges) {
     }
   }
   
-  
-  line = data.frame(t = c(1:2000), Nt = c(rep(25, 499), c(max(all_ranges_sub$shift_rate)*1:1501 + 25)))
+  line = data.frame(t = 1:2000, Nt = c(rep(41, length.out = 500), shift_rate*(1:(n_ts-500)) + 41))
   
   ## add niche parameters 
   plot = params_all %>%
@@ -211,18 +210,19 @@ plot_shift_params_together <- function(all_ranges) {
     gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
                                                        "mean_max_y", "mean_min_y", "abd_centroid", 
                                                        "ext_edge", "est_edge")) %>%
-    filter(parameter %in% c("q5_y", "q95_y", "abd_centroid")) %>% 
+    filter(parameter %in% c("max_y", "min_y", "abd_centroid")) %>% 
     mutate(period = paste(period, parameter)) %>%
     mutate(group = paste(beta, p, parameter), 
-           colour = paste(p, beta, sep = "_")) %>%
+           colour = paste(p, beta, sep = "_")) %>% 
     ggplot(aes(x = t, y = measurement, colour = colour, group = group)) +
     geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt)) +
     geom_line() + 
     theme_bw() +
     #geom_smooth(method = "lm", aes(group = period)) +
     scale_x_continuous(limits = c(0, 2000)) +
-    scale_y_continuous(limits = c(0, 100)) +
-    labs(x = "Time", y = "Latitude", colour = "p_beta") 
+    scale_y_continuous(limits = c(0, 300)) +
+    labs(x = "Time", y = "Latitude", colour = "p_beta") +
+    facet_wrap(~p)
   
   ggsave(plot, path = "outputs/figures/range-shift-simulations/", 
          filename = paste0("rep", rep, "_icp0.1", 
@@ -235,6 +235,101 @@ plot_shift_params_together <- function(all_ranges) {
   #                          "_shift_est-ext-edge", ".png"), 
   #        width = 5, height = 3)
   
+}
+
+calculate_mean_shift_params <- function(all_ranges) {
+  
+  ## for each time step, calculate: 
+  ## LEADING EDGE
+  ## - y position of furthest occupied cell 
+  ## - mean y position of furthest 10 occupied cells 
+  ## - 95% of occupancy
+  ## TRAILING EDGE
+  ## - y position of furthest occupied cell  
+  ## - mean y position of furthest 10 occupied cells 
+  ## - 5% of occupancy
+  ## CENTROID
+  ## - mean y value occupancy
+  ## - abuncance weighted mean y value of occupancy
+  
+  ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
+  
+  ## get ps and betas
+  ps = c(0,1)
+  betas = c(0,1)
+  rep = unique(all_ranges$rep)
+  shift_rates_all <- c()
+  for(p in ps) {
+    for(beta in betas) {
+      
+      all_ranges_sub <- all_ranges[which(all_ranges$p == p & all_ranges$beta == beta),]
+      
+      params = all_ranges_sub %>%
+        filter(Nt != 0) %>%
+        group_by(t) %>%
+        summarize(max_y = max(y), 
+                  q95_y = quantile(y, c(0.95)),
+                  min_y = min(y),
+                  q5_y = quantile(y, c(0.05)),
+                  abd_centroid = weighted.mean(y, Nt),
+                  mean_y = mean(y)) 
+      
+      params2 = all_ranges_sub %>%
+        filter(Nt != 0) %>% 
+        group_by(t) %>%
+        arrange(-y) %>%
+        slice(1:10) %>%
+        summarize(mean_max_y = mean(y))
+      
+      params3 = all_ranges_sub %>%
+        filter(Nt != 0) %>% 
+        group_by(t) %>%
+        arrange(y) %>%
+        slice(1:10) %>%
+        summarize(mean_min_y = mean(y))
+      
+      mid_occ_lat = all_ranges_sub[which(all_ranges_sub$Nt != 0),]
+      mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
+      
+      params4 = all_ranges_sub %>%
+        filter(est == 1) %>%
+        group_by(t) %>%
+        filter(y <= mid_occ_lat) %>%
+        summarize(est_edge = quantile(y, c(0.05), na.rm = T))
+      params5 = all_ranges_sub %>%
+        filter(ext == 1) %>%
+        group_by(t) %>%
+        filter(y > mid_occ_lat) %>%
+        summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
+      
+      params <- left_join(params, params2) %>% left_join(., params3) %>% left_join(., params4) %>%
+        left_join(., params5)
+      
+      ## calculate trends over time in each parameter
+      shift_rates = params %>%
+        mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+        filter(t <1500 ) %>% ## get rid of period where range shifts out of frame of reference 
+        gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
+                                                           "mean_max_y", "mean_min_y", "abd_centroid", 
+                                                           "ext_edge", "est_edge")) %>%
+        filter(parameter %in% c("q95_y", "q5_y", "abd_centroid")) %>% 
+        group_by(parameter) %>%
+        filter(period == "shifting") %>%
+        do(broom::tidy(lm(measurement ~ t, data = .), conf.int = TRUE)) %>% 
+        filter(term == "t") %>% 
+        rename(shift_rate = estimate) %>% 
+        ungroup() %>%
+        mutate(beta = beta, p = p)
+      
+      if(length(shift_rates_all) == 0) {
+        shift_rates_all <- shift_rates
+      }
+      else {
+        shift_rates_all <- rbind(shift_rates_all, shift_rates)
+      }
+    }
+  }
+  return(shift_rates_all)
 }
 
 calculate_ext_est <- function(all_ranges, threshold) {
@@ -430,12 +525,12 @@ est_ext_grid <- function(all_ranges, threshold) {
 source("R/functions/plot_range.R")
 
 ## set up filenames
-files = list.files("outputs/data-processed/range-shift-simulations/all-ranges", full.names = T)
+files = list.files("outputs/data-processed/range-shift-simulations/all-ranges_leading-edge", full.names = T)
 
 files = files[which(!str_detect(files, "dispersal"))]
 
 ## get reps
-reps = str_split_fixed(files, "outputs/data-processed/range-shift-simulations/all-ranges/range-shifts_rep", 2)[,2]
+reps = str_split_fixed(files, "outputs/data-processed/range-shift-simulations/all-ranges_leading-edge/range-shifts_rep", 2)[,2]
 reps = unique(as.numeric(str_split_fixed(reps, "_p", 2)[,1]))
 
 ## for each rep
@@ -460,6 +555,18 @@ while(r <= length(unique(reps))) {
   calculate_shift_params(all_ranges = all_ranges)
   
   plot_shift_params_together(all_ranges = all_ranges)
+  
+  ## calculate mean shift rate and compare to mean climate velocity
+  shift_params <- calculate_mean_shift_params(all_ranges = all_ranges)
+    
+  shift_params %>%
+    mutate(clim_velo = unique(all_ranges$shift_rate)) %>%
+    filter(parameter != "abd_centroid") %>%
+    mutate(p_beta = paste(p, beta, sep = "_")) %>%
+    ggplot(aes(x = parameter, y = shift_rate, colour = p_beta)) +
+    geom_boxplot() +
+    geom_point(aes(x = parameter, y = unique(all_ranges$shift_rate)))
+  
   
   ## plot ranges in each time step 
   plot_range(range_shift = all_ranges, path = "outputs/figures/range-shifts")
@@ -610,4 +717,27 @@ all_ranges %>%
   filter(p==1, beta==1, t == 1) %>% View
 
 
+
+split = all_ranges %>%
+  filter(t %in% c(500, 1750), Nt != 0) %>%
+  group_by(p, beta, t) %>%
+  summarise(lat_pos = max(y)) %>% 
+  group_by(t) %>%
+  group_split()
+
+df1 = split[[1]]
+df2 = split[[2]]
+
+df1 <- rename(df1, "lat_pos_500" = lat_pos) %>%
+  select(-t)
+df2 <- rename(df2, "lat_pos_1750" = lat_pos) %>%
+  select(-t)
+
+df = left_join(df1, df2)
+
+df %>%
+  mutate(surv_resurv_rate = (lat_pos_1750 - lat_pos_500)/(1750-500),
+         p = as.character(p)) %>%
+  ggplot(aes(y = surv_resurv_rate, x = beta, colour = p)) +
+  geom_point()
 

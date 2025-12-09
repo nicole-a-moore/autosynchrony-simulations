@@ -584,13 +584,19 @@ cv_lat = temp_trend_rast*cos_angle
 
 ## units are degrees latitude/year
 ## convert to km/y (approximately)
-cv_lat = cv_lat*110
+cv_lat = cv_lat*111
 
 plot(cv_lat)
-mean(values(cv_lat), na.rm = T)
+mean(values(cv_lat), na.rm = T) # 0.08 km/y
+max(values(cv_lat), na.rm = T) # 7.99 km/y
+min(values(cv_lat), na.rm = T) # -8.07 km/y 
+sd(values(cv_lat), na.rm = T) # 3.57
 
 hist(cv_lat)
-hist(shifts$slope*110)
+hist(shifts$slope*111)
+
+## save climate velocity raster
+writeRaster(cv_lat, "outputs/data-processed/cv_north-america_1980-2021.tif")
 
 
 ## calculate across the cardinal's range
@@ -609,5 +615,165 @@ plot(test)
 mean(values(test), na.rm = T)
 
 shifts$slope[which(shifts$genus_sp == 'Cardinalis cardinalis' & shifts$range_edge == "leading")]*110
+
+##########################################
+##          standard deviation          ##
+##########################################
+## measure standard deviation of anomalies and see how much variation there is across space
+## also just plot some and look at them 
+## how long are these good and bad periods? how good and bad?
+library(ncdf4)
+
+## read in seasonally detrended temperature data
+s_filenames = readRDS("/Volumes/NIKKI/CMIP5-GCMs/BerkeleyEarth/BerkeleyEarth_sp_files.rds")
+s_filenames <- str_replace_all(s_filenames, "spatial_temps", 's-detrended')
+
+## make date vector
+## first date: 1880/1/1
+## last date: 2021/12/31
+dates = seq(ymd("1880-01-01"), ymd("2021-12-31"), by = "day")
+## remove leap year dates 
+dates = dates[-which(str_split_fixed(dates, "-", 2)[,2] == "02-29")]
+
+## make lat long vectors 
+lat <- seq(from = 89.5, to = -89.5, length.out = 180) 
+lon <-seq(from = 0.5, to = 359.5, length.out = 360) 
+
+lon_index = 0
+lat_index = 90
+count = 1
+while(count <= length(s_filenames)) {
+  
+  ## get lat and lon bounds to extract in between:
+  lon_bound1 <- lon_index 
+  lon_bound2 <- lon_index + 60
+  lat_bound1 <- lat_index
+  lat_bound2 <- lat_index - 60
+  
+  ## open file 
+  s_open = nc_open(s_filenames[count])
+  s_detrended_tas = ncvar_get(s_open, "var1_1")
+  nc_close(s_open)
+  
+  ## plot map 
+  #test = rast(s_detrended_tas)
+  #plot(test[[1]])
+  
+  ## change to xyz dataframe
+  t = reshape::melt(s_detrended_tas)
+  
+  ## rename
+  t = rename(t, "y" = X1, "x" = X2, "time" = X3, "anomaly" = value)
+  
+  ## fix date
+  key = data.frame(time = 1:length(dates), date = dates)
+  t = left_join(t, key) %>%
+    select(-time)
+  
+  ## fix latitude
+  lat_key = data.frame(y = 1:60, lat = seq(lat_bound1-0.5, lat_bound2))
+  t = left_join(t, lat_key)
+  
+  ## fix longitude
+  lon_key = data.frame(x = 1:60, lon = seq(lon_bound1+0.5, lon_bound2)-180)
+  t = left_join(t, lon_key) 
+    
+  ## rearrange 
+  t = t %>% select(-x, -y) %>% select(lon, lat, date, anomaly)
+  
+  test_t = filter(t, date %in% unique(dates)[1])
+  
+  test = rast(test_t, type = "xyz")
+  plot(test)
+
+  
+  ## look at one with high autocorrelation versus low
+  ## read in autocorrelation file 
+  se = readRDS("/Volumes/NIKKI/CMIP5-GCMs/BerkeleyEarth/BerkeleyEarth_noise-colour.rds")
+  
+  se %>%
+    select(lat, lon, s_spec_exp_PSD_low_all) %>%
+    unique()
+  
+  ## find highest
+  sub = se %>%
+    filter(lat < max(t$lat), lon < max(t$lon),
+           lat > min(t$lat), lon > min(t$lon)) 
+  sub[which(sub$s_spec_exp_PSD_low_all == max(sub$s_spec_exp_PSD_low_all)),]
+  
+  ## get one time series and plot it 
+  one = filter(t, t$lat == 56.5)
+  one = filter(one, one$lon == -121.5)
+  
+  one %>%
+    ggplot(aes(x = date, y = anomaly)) +
+    geom_line(linewidth = 0.1) +
+    geom_hline(yintercept = 0, colour = "red")
+  
+  ## zoom in on a year  
+  one %>%
+    filter(date >= "1980-01-01") %>%
+    filter(date <= "1981-01-01") %>%
+    ggplot(aes(x = date, y = anomaly)) +
+    geom_line(linewidth = 0.1) +
+    geom_hline(yintercept = 0, colour = "red")
+  
+  ## calculate sd 
+  sd(one$anomaly, na.rm = TRUE) ## 2.71
+
+  ## find lowest
+  sub[which(sub$s_spec_exp_PSD_low_all == min(sub$s_spec_exp_PSD_low_all)),]
+  
+  ## get one time series and plot it 
+  one = filter(t, t$lat == 52.5)
+  one = filter(one, one$lon == -177.5)
+  
+  one %>%
+    ggplot(aes(x = date, y = anomaly)) +
+    geom_line(linewidth = 0.1) +
+    geom_hline(yintercept = 0, colour = "red")
+  
+  ## zoom in on a year  
+  one %>%
+    filter(date >= "1980-01-01") %>%
+    filter(date <= "1981-01-01") %>%
+    ggplot(aes(x = date, y = anomaly)) +
+    geom_line(linewidth = 0.1) +
+    geom_hline(yintercept = 0, colour = "red")
+  
+  ## calculate sd 
+  sd(one$anomaly, na.rm = TRUE) ## 2.02
+  
+  
+  ## create raster from data frame 
+  se$lon = se$lon - 180
+  r = se %>%
+    select(lon, lat, s_spec_exp_PSD_low_all) %>%
+    rast()
+  
+  plot(r)
+  
+  
+  
+  
+  
+  ## advance lat and long indecies to move to next chunk
+  if (count == 6) {
+    lat_index <- lat_index + 60
+    lon_index <- 0
+  }
+  else if (count == 12) {
+    lat_index <- lat_index + 60
+    lon_index <- 0
+  }
+  else {
+    lon_index <- lon_index + 60
+  }
+  
+  spec_exp_df <- c()
+  
+  count = count + 1
+}
+
 
 

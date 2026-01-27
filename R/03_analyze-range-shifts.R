@@ -101,6 +101,7 @@ plot_shift_params <- function(all_sims,
                               icp = c(), 
                               K = c(), 
                               r_max = c(), 
+                              sigma = c(),
                               rep = c(), param = "q95_y") {
   if(length(p) == 0) {
     p_arg = unique(all_sims$p)
@@ -142,6 +143,11 @@ plot_shift_params <- function(all_sims,
   }else {
     r_max_arg = r_max
   }
+  if(length(sigma) == 0) {
+    sigma_arg = unique(all_sims$sigma)
+  }else {
+    r_max_arg = r_max
+  }
   if(length(rep) == 0) {
     rep_arg = unique(all_sims$rep)
   }else {
@@ -151,7 +157,8 @@ plot_shift_params <- function(all_sims,
   ## plot range shift parameters for specified simulations
   params <- all_sims %>%
     filter(p %in% p_arg, beta %in% beta_arg, d %in% d_arg, shift_rate %in% shift_rate_arg,
-           icp %in% icp_arg, d_dist %in% d_dist_arg, K %in% K_arg, r_max %in% r_max_arg, rep %in% rep_arg) 
+           icp %in% icp_arg, d_dist %in% d_dist_arg, K %in% K_arg, r_max %in% r_max_arg, rep %in% rep_arg, 
+           sigma %in% sigma_arg) 
   
   ## get max time step
   n_ts = max(params$t)
@@ -163,37 +170,44 @@ plot_shift_params <- function(all_sims,
     plot = params %>%
       arrange(beta, p, icp, K, r_max, d, d_dist, rep, t) %>%
       mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-      mutate(beta = as.character(beta)) %>%
+      mutate(beta = as.character(beta),
+             d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
       filter(parameter == param) %>% 
       mutate(period = paste(period)) %>%
-      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep),
+      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep, sigma),
              p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
       ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-      geom_line(aes(group = group)) + 
+      geom_line(aes(group = group, linetype = d_dist)) + 
       geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
       theme_bw() +
       #geom_smooth(method = "lm", aes(group = period)) +
       scale_x_continuous(limits = c(0, 2000)) +
       scale_y_continuous(limits = c(0, 300)) +
-      labs(x = "Time", y = "Latitude", colour = "p_beta") +
-      facet_wrap(p~icp) 
+      labs(x = "Time", y = "Latitude", colour = "Beta", linetype = "Dispersal\ndistance") +
+      facet_grid(p~icp) 
+    
   } else {
     plot = params %>%
       arrange(beta, p, icp, K, r_max, d, d_dist, rep, t) %>%
       mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-      mutate(beta = as.character(beta)) %>%
+      mutate(beta = as.character(beta),
+             d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
       filter(parameter == param) %>% 
       mutate(period = paste(period)) %>%
-      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep),
+      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep, sigma),
              p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
       ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-      geom_line(aes(group = group)) + 
+      geom_line(aes(group = group, linetype = d_dist)) + 
       theme_bw() +
       #geom_smooth(method = "lm", aes(group = period)) +
       scale_x_continuous(limits = c(0, 2000)) +
       scale_y_continuous(limits = c(0, 300)) +
-      labs(x = "Time", y = "Latitude", colour = "p_beta") +
-      facet_wrap(p~icp) 
+      labs(x = "Time", y = "Latitude", colour = "Beta", colour = "Beta", linetype = "Dispersal\ndistance") +
+      facet_grid(p~icp) 
   }
   
   return(plot)
@@ -206,7 +220,7 @@ source("R/functions/plot_range.R")
 ############################################################
 ## process results from each simulation separately, measuring range edge parameters over time
 ## set up filenames
-dir = "outputs/data-processed/range-shift-simulations/sim-results"
+dir = "outputs/data-processed/range-shift-simulations_dispersal/sim-results"
 files = list.files(dir, full.names = T)
 folders = list.files(dir)
 
@@ -225,17 +239,18 @@ while(f <= length(files)) {
   
   ## get rep, dipsersal distance, dispersal proportion, icp, K, rmax
   ## and add info to shift data
-  split = str_split_fixed(folders[f], "_", 10)
+  split = str_split_fixed(folders[f], "_", 11)
   
   shift_data$icp = substr(split[,4], 4,6)
   shift_data$K = substr(split[,5], 2,5)
   shift_data$d = substr(split[,6], 2,4)
   shift_data$r_max = substr(split[,7], 2,3)
   shift_data$d_dist = substr(split[,8], 7,7)
-  shift_data$rep = unique(as.numeric(str_split_fixed(substr(split[,10], 4, nchar(split[,10])), ".csv", 2)[,1]))
+  shift_data$sigma = substr(split[,9], 7,7)
+  shift_data$rep = unique(as.numeric(str_split_fixed(substr(split[,11], 4, nchar(split[,11])), ".csv", 2)[,1]))
   
   ## save shift data 
-  write.csv(shift_data, paste0("outputs/data-processed/range-shift-simulations/cluster/shift-data/shift-data_",
+  write.csv(shift_data, paste0("outputs/data-processed/range-shift-simulations_dispersal/shift-data/shift-data_",
                                folders[f]), row.names = F)
 
   f = f + 1
@@ -248,7 +263,7 @@ while(f <= length(files)) {
 #### PLOT SIMULATION RESULTS TOGETHER 
 
 ## read in and combine all simulation shift data
-files = list.files("outputs/data-processed/range-shift-simulations/cluster/shift-data", full.names = T)
+files = list.files("outputs/data-processed/range-shift-simulations_dispersal/shift-data", full.names = T)
 
 all_sims <- c()
 for(i in 1:length(files)) {

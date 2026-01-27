@@ -2,14 +2,14 @@
 library(tidyverse)
 
 ## make a folder to store results
-dir = "outputs/data-processed/range-shift-simulations_dispersal/sim-results"
+dir = "outputs/data-processed/simulations_no-change/sim-results"
 if(!dir.exists(dir)) {
   dir.create(dir, recursive = T)
 }
 
 ## go through each folder 
-paths = list.files("outputs/data-processed/range-shift-simulations_dispersal/raw-sims", full.names = T)
-folders = list.files("outputs/data-processed/range-shift-simulations_dispersal/raw-sims")
+paths = list.files("outputs/data-processed/simulations_no-change/raw-sims", full.names = T)
+folders = list.files("outputs/data-processed/simulations_no-change/raw-sims")
 
 f = 1
 while(f <= length(folders)) {

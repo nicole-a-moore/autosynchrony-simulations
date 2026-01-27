@@ -1,5 +1,4 @@
-## analyze range shift 
-## plot 
+## analyze range shift simulation data
 library(tidyverse)
 select = dplyr::select
 
@@ -7,7 +6,7 @@ select = dplyr::select
 ###########################################
 ##               functions               ##
 ###########################################
-calculate_shift_params <- function(all_ranges) {
+calculate_shift_params <- function(simulation) {
   
   ## for each time step, calculate: 
   ## LEADING EDGE
@@ -24,623 +23,259 @@ calculate_shift_params <- function(all_ranges) {
   
   ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
   
-  ## get ps and betas
-  ps = c(0,1)
-  betas = c(0,1)
-  rep = unique(all_ranges$rep)
+  params = simulation %>%
+    filter(Nt != 0) %>%
+    group_by(t) %>%
+    summarize(max_y = max(y), 
+              q95_y = quantile(y, c(0.95)),
+              min_y = min(y),
+              q5_y = quantile(y, c(0.05)),
+              abd_centroid = weighted.mean(y, Nt),
+              mean_y = mean(y)) 
   
-  for(p in ps) {
-    for(beta in betas) {
-      
-      all_ranges_sub <- all_ranges[which(all_ranges$p == p & all_ranges$beta == beta),]
-        
-      params = all_ranges_sub %>%
-        filter(Nt != 0) %>%
-        group_by(t) %>%
-        summarize(max_y = max(y), 
-                  q95_y = quantile(y, c(0.95)),
-                  min_y = min(y),
-                  q5_y = quantile(y, c(0.05)),
-                  abd_centroid = weighted.mean(y, Nt),
-                  mean_y = mean(y)) 
-      
-      params2 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t) %>%
-        arrange(-y) %>%
-        slice(1:10) %>%
-        summarize(mean_max_y = mean(y))
-      
-      params3 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t) %>%
-        arrange(y) %>%
-        slice(1:10) %>%
-        summarize(mean_min_y = mean(y))
-      
-      mid_occ_lat = all_ranges_sub[which(all_ranges_sub$Nt != 0),]
-      mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
-      
-      params4 = all_ranges_sub %>%
-        filter(est == 1) %>%
-        group_by(t) %>%
-        filter(y <= mid_occ_lat) %>%
-        summarize(est_edge = quantile(y, c(0.05), na.rm = T))
-      params5 = all_ranges_sub %>%
-        filter(ext == 1) %>%
-        group_by(t) %>%
-        filter(y > mid_occ_lat) %>%
-        summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
-      
-      params <- left_join(params, params2) %>% left_join(., params3) %>% left_join(., params4) %>%
-        left_join(., params5)
-      
-      line = data.frame(t = c(1:1999), Nt = c(rep(25, 499), c(max(all_ranges_sub$shift_rate)*1:1500 + 25)))
-      
-      ## add niche parameters 
-      plot = params %>%
-        mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-        gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
-                                                           "mean_max_y", "mean_min_y", "abd_centroid", 
-                                                           "ext_edge", "est_edge")) %>%
-        filter(parameter %in% c("min_y", "q95_y", "abd_centroid")) %>% 
-        mutate(period = paste(period, parameter)) %>%
-        ggplot(aes(x = t, y = measurement, colour = parameter)) +
-        geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt)) +
-        geom_line() + 
-        theme_bw() +
-        #geom_smooth(method = "lm", aes(group = period)) +
-        scale_x_continuous(limits = c(0, 2000)) +
-        scale_y_continuous(limits = c(0, 300)) +
-        labs(x = "Time", y = "Latitude", colour = "Range edge")
-      
-      plot2 = params %>%
-        mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-        gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
-                                                           "mean_max_y", "mean_min_y", "abd_centroid", 
-                                                           "ext_edge", "est_edge")) %>%
-        filter(parameter %in% c("ext_edge", "est_edge")) %>% 
-        mutate(period = paste(period, parameter)) %>%
-        ggplot(aes(x = t, y = measurement, colour = parameter)) +
-        geom_line() + 
-        theme_bw() +
-        #geom_smooth(method = "lm", aes(group = period)) +
-        geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt)) +
-        scale_x_continuous(limits = c(0, 2000)) +
-        scale_y_continuous(limits = c(0, 100)) +
-        labs(x = "Time", y = "Latitude", colour = "Range edge")
-      
-      ggsave(plot, path = "outputs/figures/range-shift-simulations/", 
-             filename = paste0("rep", rep, "_p", 
-                               p, "_b", 
-                               beta, "_icp0.1", 
-                               "_shift", ".png"), 
-             width = 5, height = 3)
-      # ggsave(plot2, path = "outputs/figures/range-shift-simulations/", 
-      #        filename = paste0("rep", rep, "_p", 
-      #                          p, "_b", 
-      #                          beta, "_icp0.1", 
-      #                          "_shift_est-ext-edge", ".png"), 
-      #        width = 5, height = 3)
-      
-    }
-  }
-
-}
-
-plot_shift_params_together <- function(all_ranges) {
+  params2 = simulation %>%
+    filter(Nt != 0) %>% 
+    group_by(t) %>%
+    arrange(-y) %>%
+    slice(1:10) %>%
+    summarize(mean_max_y = mean(y))
   
-  ## for each time step, calculate: 
-  ## LEADING EDGE
-  ## - y position of furthest occupied cell 
-  ## - mean y position of furthest 10 occupied cells 
-  ## - 95% of occupancy
-  ## TRAILING EDGE
-  ## - y position of furthest occupied cell  
-  ## - mean y position of furthest 10 occupied cells 
-  ## - 5% of occupancy
-  ## CENTROID
-  ## - mean y value occupancy
-  ## - abuncance weighted mean y value of occupancy
+  params3 = simulation %>%
+    filter(Nt != 0) %>% 
+    group_by(t) %>%
+    arrange(y) %>%
+    slice(1:10) %>%
+    summarize(mean_min_y = mean(y))
   
-  ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
+  mid_occ_lat = simulation[which(simulation$Nt != 0),]
+  mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
   
-  ## get ps and betas
-  ps = unique(all_ranges$p)
-  betas = unique(all_ranges$beta)
-  rep = unique(all_ranges$rep)
-  params_all <- c()
+  params <- left_join(params, params2, by = "t") %>% left_join(., params3, by = "t") 
   
-  for(p in ps) {
-    for(beta in betas) {
-      
-      all_ranges_sub <- all_ranges[which(all_ranges$p == p & all_ranges$beta == beta),]
-      
-      params = all_ranges_sub %>%
-        filter(Nt != 0) %>%
-        group_by(t, shift_rate) %>%
-        summarize(max_y = max(y), 
-                  q95_y = quantile(y, c(0.95)),
-                  min_y = min(y),
-                  q5_y = quantile(y, c(0.05)),
-                  abd_centroid = weighted.mean(y, Nt),
-                  mean_y = mean(y)) 
-      
-      params2 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t, shift_rate) %>%
-        arrange(-y) %>%
-        slice(1:10) %>%
-        summarize(mean_max_y = mean(y))
-      
-      params3 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t, shift_rate) %>%
-        arrange(y) %>%
-        slice(1:10) %>%
-        summarize(mean_min_y = mean(y))
-      
-      mid_occ_lat = all_ranges_sub[which(all_ranges_sub$Nt != 0),]
-      mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
-      
-      params4 = all_ranges_sub %>%
-        filter(est == 1) %>%
-        group_by(t, shift_rate) %>%
-        filter(y <= mid_occ_lat) %>%
-        summarize(est_edge = quantile(y, c(0.05), na.rm = T))
-      params5 = all_ranges_sub %>%
-        filter(ext == 1) %>%
-        group_by(t, shift_rate) %>%
-        filter(y > mid_occ_lat) %>%
-        summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
-      
-      params <- left_join(params, params2) %>% left_join(., params3) %>% left_join(., params4) %>%
-        left_join(., params5) %>%
-        mutate(beta = beta, p = p)
-      
-      params_all <- rbind(params_all, params)
-    }
-  }
+  ## add back info about simulation:
+  info = simulation %>%
+    select(p, beta, shift_rate) %>%
+    unique() 
   
-  line = data.frame(t = 1:2000, Nt = c(rep(41, length.out = 500), shift_rate*(1:(n_ts-500)) + 41))
+  params$p = info$p
+  params$beta = info$beta
+  params$shift_rate = info$shift_rate
   
-  ## add niche parameters 
-  plot = params_all %>%
-    mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  ## gather different parameters 
+  params <- params %>%
     gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
-                                                       "mean_max_y", "mean_min_y", "abd_centroid", 
-                                                       "ext_edge", "est_edge")) %>%
-    filter(parameter %in% c("max_y", "min_y", "abd_centroid")) %>% 
-    mutate(period = paste(period, parameter)) %>%
-    mutate(group = paste(beta, p, parameter, shift_rate), 
-           colour = paste(p, beta, sep = "_")) %>%
-    ggplot(aes(x = t, y = measurement, colour = colour, group = group)) +
-    geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
-    geom_line() + 
-    theme_bw() +
-    #geom_smooth(method = "lm", aes(group = period)) +
-    scale_x_continuous(limits = c(0, 2000)) +
-    scale_y_continuous(limits = c(0, 300)) +
-    labs(x = "Time", y = "Latitude", colour = "p_beta") +
-    facet_wrap(~p)
-  
-  ggsave(plot, path = "outputs/figures/range-shift-simulations/", 
-         filename = paste0("rep", rep, "_icp0.1", 
-                           "_shift_all", ".png"), 
-         width = 5, height = 3)
-  # ggsave(plot2, path = "outputs/figures/range-shift-simulations/", 
-  #        filename = paste0("rep", rep, "_p", 
-  #                          p, "_b", 
-  #                          beta, "_icp0.1", 
-  #                          "_shift_est-ext-edge", ".png"), 
-  #        width = 5, height = 3)
-  
-}
+                                                     "mean_max_y", "mean_min_y", "abd_centroid")) 
 
-calculate_mean_shift_params <- function(all_ranges) {
-  
-  ## for each time step, calculate: 
-  ## LEADING EDGE
-  ## - y position of furthest occupied cell 
-  ## - mean y position of furthest 10 occupied cells 
-  ## - 95% of occupancy
-  ## TRAILING EDGE
-  ## - y position of furthest occupied cell  
-  ## - mean y position of furthest 10 occupied cells 
-  ## - 5% of occupancy
-  ## CENTROID
-  ## - mean y value occupancy
-  ## - abuncance weighted mean y value of occupancy
-  
-  ## then calculate lags for each by subtracting position of 95%, 5% and max suitability
-  
-  ## get ps and betas
-  ps = c(0,1)
-  betas = c(0,1)
-  rep = unique(all_ranges$rep)
-  shift_rates_all <- c()
-  for(p in ps) {
-    for(beta in betas) {
-      
-      all_ranges_sub <- all_ranges[which(all_ranges$p == p & all_ranges$beta == beta),]
-      
-      params = all_ranges_sub %>%
-        filter(Nt != 0) %>%
-        group_by(t) %>%
-        summarize(max_y = max(y), 
-                  q95_y = quantile(y, c(0.95)),
-                  min_y = min(y),
-                  q5_y = quantile(y, c(0.05)),
-                  abd_centroid = weighted.mean(y, Nt),
-                  mean_y = mean(y)) 
-      
-      params2 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t) %>%
-        arrange(-y) %>%
-        slice(1:10) %>%
-        summarize(mean_max_y = mean(y))
-      
-      params3 = all_ranges_sub %>%
-        filter(Nt != 0) %>% 
-        group_by(t) %>%
-        arrange(y) %>%
-        slice(1:10) %>%
-        summarize(mean_min_y = mean(y))
-      
-      mid_occ_lat = all_ranges_sub[which(all_ranges_sub$Nt != 0),]
-      mid_occ_lat = mean(mid_occ_lat$y, na.rm = TRUE)
-      
-      params4 = all_ranges_sub %>%
-        filter(est == 1) %>%
-        group_by(t) %>%
-        filter(y <= mid_occ_lat) %>%
-        summarize(est_edge = quantile(y, c(0.05), na.rm = T))
-      params5 = all_ranges_sub %>%
-        filter(ext == 1) %>%
-        group_by(t) %>%
-        filter(y > mid_occ_lat) %>%
-        summarize(ext_edge = quantile(y, c(0.95), na.rm = T))
-      
-      params <- left_join(params, params2) %>% left_join(., params3) %>% left_join(., params4) %>%
-        left_join(., params5)
-      
-      ## calculate trends over time in each parameter
-      shift_rates = params %>%
-        mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-        filter(t <1500 ) %>% ## get rid of period where range shifts out of frame of reference 
-        gather(key = "parameter", value = "measurement", c("max_y", "min_y", "mean_y", "q95_y", "q5_y",
-                                                           "mean_max_y", "mean_min_y", "abd_centroid", 
-                                                           "ext_edge", "est_edge")) %>%
-        filter(parameter %in% c("q95_y", "q5_y", "abd_centroid")) %>% 
-        group_by(parameter) %>%
-        filter(period == "shifting") %>%
-        do(broom::tidy(lm(measurement ~ t, data = .), conf.int = TRUE)) %>% 
-        filter(term == "t") %>% 
-        rename(shift_rate = estimate) %>% 
-        ungroup() %>%
-        mutate(beta = beta, p = p)
-      
-      if(length(shift_rates_all) == 0) {
-        shift_rates_all <- shift_rates
-      }
-      else {
-        shift_rates_all <- rbind(shift_rates_all, shift_rates)
-      }
-    }
+  ## if there is data past the shifting period
+  if(max(params$t) > 500) {
+    
+    rates <- params %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      filter(period == "shifting") %>% 
+      group_by(parameter) %>%
+      do(broom::tidy(lm(measurement ~ t, data = .), conf.int = TRUE)) %>%
+      filter(term == "t") %>%
+      rename(shift_rate_estimate = estimate) %>%
+      ungroup() %>%
+      select(-term)
+    
+    params = left_join(params, rates, by = c("parameter"))
+    
+    
+    return(params)
   }
-  return(shift_rates_all)
+  else {
+    params$shift_rate_estimate = params$std.error = params$statistic = params$p.value = NA
+    params$conf.low = params$conf.high = NA  
+  }
+  
+  return(params)
 }
 
-calculate_ext_est <- function(all_ranges, threshold) {
-  ## for each cell, calculate no. ext and est. over time 
-  ## split by cell
-  split = all_ranges %>%
-    group_by(x, y, p, beta) %>%
-    group_split(.)
+plot_shift_params <- function(all_sims, 
+                              p = c(),
+                              beta = c(), 
+                              d = c(), 
+                              d_dist = c(), 
+                              shift_rate = c(), 
+                              icp = c(), 
+                              K = c(), 
+                              r_max = c(), 
+                              rep = c(), param = "q95_y") {
+  if(length(p) == 0) {
+    p_arg = unique(all_sims$p)
+  } else {
+    p_arg = p
+  }
+  if(length(beta) == 0) {
+    beta_arg = unique(all_sims$beta)
+  }else {
+    beta_arg = beta
+  }
+  if(length(d) == 0) {
+    d_arg = unique(all_sims$d)
+  }else {
+    d_arg = d
+  }
+  if(length(d_dist) == 0) {
+    d_dist_arg = unique(all_sims$d_dist)
+  }else {
+    d_dist_arg = d_dist
+  }
+  if(length(shift_rate) == 0) {
+    shift_rate_arg = unique(all_sims$shift_rate)
+  }else {
+    shift_rate_arg = shift_rate
+  }
+  if(length(icp) == 0) {
+    icp_arg = unique(all_sims$icp)
+  }else {
+    icp_arg = icp
+  }
+  if(length(K) == 0) {
+    K_arg = unique(all_sims$K)
+  }else {
+    K_arg = K
+  }
+  if(length(r_max) == 0) {
+    r_max_arg = unique(all_sims$r_max)
+  }else {
+    r_max_arg = r_max
+  }
+  if(length(rep) == 0) {
+    rep_arg = unique(all_sims$rep)
+  }else {
+    rep_arg = rep
+  }
   
-  list = lapply(split, FUN = function(df) {
-    ts = df$Nt
-    zero_count = 0
-    ext = 0
-    est = 0
-    max_zero_count <- 0
-    for(i in 1:length(ts)) {
-      if(i == 1) {
-        if(ts[i] == 0) {
-          zero_count = 1
-        }
-      }
-      else if(is.na(ts[i]))  {
-        if(zero_count > max_zero_count) {
-          max_zero_count = zero_count
-        }
-        zero_count = 0
-        if(i == length(ts)) {
-          if(max_zero_count >= threshold) {
-            ext = ext + 1
-          }
-        }
-      }
-      else if(ts[i] == 0) {
-        zero_count = zero_count + 1
-        if(zero_count > max_zero_count) {
-          max_zero_count = zero_count
-        }
-        if(i == length(ts)) {
-          if(max_zero_count >= threshold) {
-            ext = ext + 1
-          }
-        }
-      }
-      else if(ts[i] >= 1 & max_zero_count >= threshold) {
-        if(!any(ts[which(!is.na(ts[1:(i-1)]))] != 0) & first(ts) == 0) {
-          ext = 0
-        }
-        else {
-          ext = ext + 1
-        }
-        est = est + 1
-        zero_count = 0
-        max_zero_count = 0
-      }
-      else if(ts[i] >= 1 & max_zero_count <= threshold) {
-        zero_count = 0
-        max_zero_count = 0
-      }
-    }
+  ## plot range shift parameters for specified simulations
+  params <- all_sims %>%
+    filter(p %in% p_arg, beta %in% beta_arg, d %in% d_arg, shift_rate %in% shift_rate_arg,
+           icp %in% icp_arg, d_dist %in% d_dist_arg, K %in% K_arg, r_max %in% r_max_arg, rep %in% rep_arg) 
+  
+  ## get max time step
+  n_ts = max(params$t)
+  
+  ## plot
+  if(n_ts > 500) {
+    line = data.frame(t = 1:n_ts, Nt = c(rep(41, length.out = 500), shift_rate*(1:(n_ts-500)) + 41))
     
-    if(any(ts[which(!is.na(ts))[1:2]] >= 1)) {
-      new_est = FALSE
-    }
-    else {
-      new_est = TRUE
-    }
-    
-    ext_est = df %>%
-      mutate(n_est = est, n_ext = ext, new_est = new_est, n_ts = length(ts), p = df$p, beta = df$beta)
-    
-    return(ext_est)
-  })
+    plot = params %>%
+      arrange(beta, p, icp, K, r_max, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(beta = as.character(beta)) %>%
+      filter(parameter == param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "p_beta") +
+      facet_wrap(p~icp) 
+  } else {
+    plot = params %>%
+      arrange(beta, p, icp, K, r_max, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(beta = as.character(beta)) %>%
+      filter(parameter == param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(beta, p, icp, K, r_max, d, d_dist, rep),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      theme_bw() +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "p_beta") +
+      facet_wrap(p~icp) 
+  }
   
-  ## bind them all 
-  df <- bind_rows(list)
-  
-  ## problem: no. of local extinctions/establishments is lower when range goes completely extinct before 1500 time steps
-  ## solution: calculate rate of extinction/establishment by dividing it by maximum
-  
-  df <- df %>%
-    group_by(beta, p, t) %>%
-    filter(!all(Nt == 0)) %>%
-    group_by(beta, p) %>%
-    mutate(t_max = max(t),
-           mean_rate_ext = mean(n_ext/t_max),
-           mean_rate_est = mean(n_est/t_max)) %>%
-    ungroup() %>%
-    select(x, y, n_ext, n_est, p, beta, t_max, mean_rate_ext, mean_rate_est) %>%
-    distinct()
-  
-  ## plot histogram
-  # df %>%
-  #   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
-  #   ggplot(aes(x = n_ext/t_max)) +
-  #   geom_histogram() +
-  #   facet_wrap(p~beta) +
-  #   labs(x = "Local extinction rate", y = "Frequency") +
-  #   geom_vline(aes(xintercept = mean_rate_ext), colour = "red")
-  # 
-  # df %>%
-  #   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
-  #   ggplot(aes(x = n_est/t_max)) +
-  #   geom_histogram() +
-  #   facet_wrap(p~beta) +
-  #   labs(x = "Local establishment rate", y = "Frequency") +
-  #   geom_vline(aes(xintercept = mean_rate_est), colour = "red")
-  
-  return(df)
-}
-
-est_ext_grid <- function(all_ranges, threshold) {
-  split = all_ranges %>%
-    group_by(x, y, p, beta) %>%
-    group_split(.)
-  
-  list = lapply(split, FUN = function(df) {
-    ts = df$Nt
-    zero_count = 0
-    ext = 0
-    est = 0
-    max_zero_count <- 0
-    zero_count_vec <- c()
-    for(i in 1:length(ts)) {
-      if(i == 1) {
-        if(ts[i] == 0) {
-          zero_count = 1
-        }
-      }
-      else if(is.na(ts[i]))  {
-        if(zero_count > max_zero_count) {
-          max_zero_count = zero_count
-        }
-        zero_count = 0
-        if(i == length(ts)) {
-          if(max_zero_count >= threshold) {
-            ext = ext + 1
-          }
-        }
-      }
-      else if(ts[i] == 0) {
-        zero_count = zero_count + 1
-        if(zero_count > max_zero_count) {
-          max_zero_count = zero_count
-        }
-        if(i == length(ts)) {
-          if(max_zero_count >= threshold) {
-            ext = ext + 1
-          }
-        }
-      }
-      else if(ts[i] >= 1 & max_zero_count >= threshold) {
-        if(!any(ts[which(!is.na(ts[1:(i-1)]))] != 0) & first(ts) == 0) {
-          ext = 0
-        }
-        else {
-          ext = ext + 1
-        }
-        est = est + 1
-        zero_count = 0
-        max_zero_count = 0
-      }
-      else if(ts[i] >= 1 & max_zero_count <= threshold) {
-        zero_count = 0
-        max_zero_count = 0
-      }
-      zero_count_vec <- append(zero_count_vec, zero_count)
-    }
-    
-    ext = zero_count_vec 
-    ext[which(ext != 1)] = 0
-    ext[1] = 0
-    
-    est = zero_count_vec 
-    shifted = zero_count_vec[2:nrow(df)]
-    est = ifelse(shifted - est[1:(nrow(df) - 1)] < 0, 1, 0) 
-    est = c(0, est)
-    
-    return(data.frame(x = unique(df$x), y = unique(df$y), 
-                      p = unique(df$p), beta = unique(df$beta), 
-                      t = 1:nrow(df),
-                      est = est, ext = ext))
-    
-  })
-  ## bind them all 
-  df <- bind_rows(list)
-  
-  ## left join to other stats
-  all_ranges = left_join(all_ranges, df)
-  
-  return(all_ranges)
+  return(plot)
 }
 
 source("R/functions/plot_range.R")
 
+############################################################
+##               process simulation results               ##
+############################################################
+## process results from each simulation separately, measuring range edge parameters over time
 ## set up filenames
-files = list.files("outputs/data-processed/range-shift-simulations/all-ranges_leading-edge", full.names = T)
+dir = "outputs/data-processed/range-shift-simulations/sim-results"
+files = list.files(dir, full.names = T)
+folders = list.files(dir)
 
-files = files[which(!str_detect(files, "dispersal"))]
+## for each file
+f = 1
+while(f <= length(files)) {
+  
+  print(paste0("On simulation no. ", f))
+  
+  ## read in file
+  cur_file = read.csv(files[f])
+  
+  ## calculate position of range edge in each time step
+  ## estimate rate at which edge shifts with linear regression
+  shift_data = calculate_shift_params(simulation = cur_file)
+  
+  ## get rep, dipsersal distance, dispersal proportion, icp, K, rmax
+  ## and add info to shift data
+  split = str_split_fixed(folders[f], "_", 10)
+  
+  shift_data$icp = substr(split[,4], 4,6)
+  shift_data$K = substr(split[,5], 2,5)
+  shift_data$d = substr(split[,6], 2,4)
+  shift_data$r_max = substr(split[,7], 2,3)
+  shift_data$d_dist = substr(split[,8], 7,7)
+  shift_data$rep = unique(as.numeric(str_split_fixed(substr(split[,10], 4, nchar(split[,10])), ".csv", 2)[,1]))
+  
+  ## save shift data 
+  write.csv(shift_data, paste0("outputs/data-processed/range-shift-simulations/cluster/shift-data/shift-data_",
+                               folders[f]), row.names = F)
 
-## get reps
-reps = str_split_fixed(files, "outputs/data-processed/range-shift-simulations/all-ranges_leading-edge/range-shifts_rep", 2)[,2]
-reps = unique(as.numeric(str_split_fixed(reps, "_p", 2)[,1]))
-
-## for each rep
-r = 1
-while(r <= length(unique(reps))) {
-  
-  files_sub = files[which(str_detect(files, paste0("rep", reps[r], "_")))]
-    
-  ## make one big file of all simulation results for this rep
-  all_ranges <- c()
-  for(i in 1:length(files_sub)) {
-    all_ranges = rbind(all_ranges, read.csv(files_sub[i]))
-  }
-  
-  ## create column for stable vs. shifting period
-  all_ranges$period = ifelse(all_ranges$t <= 500, "stable", "shifting")
-
-  ## add est and extinction grid
-  all_ranges = est_ext_grid(all_ranges, threshold = 1)
-  
-  ## calculate range edge parameters and make plots of edges over time
-  calculate_shift_params(all_ranges = all_ranges)
-  
-  plot_shift_params_together(all_ranges = all_ranges)
-  
-  ## calculate mean shift rate and compare to mean climate velocity
-  shift_params <- calculate_mean_shift_params(all_ranges = all_ranges)
-    
-  shift_params %>%
-    mutate(clim_velo = unique(all_ranges$shift_rate)) %>%
-    filter(parameter != "abd_centroid") %>%
-    mutate(p_beta = paste(p, beta, sep = "_")) %>%
-    ggplot(aes(x = parameter, y = shift_rate, colour = p_beta)) +
-    geom_boxplot() +
-    geom_point(aes(x = parameter, y = unique(all_ranges$shift_rate)))
-  
-  
-  ## plot ranges in each time step 
-  plot_range(range_shift = all_ranges, path = "outputs/figures/range-shifts")
-  
-  ## calculate extinction and establishment rates
-  # df <- calculate_ext_est(all_ranges, threshold = 5)
-  # 
-  # df %>%
-  #   ggplot(aes(x = p, y = n_ext/t_max, colour = beta)) +
-  #   geom_point(position = position_jitterdodge()) +
-  #   facet_wrap(~beta) +
-  #   labs(y = "Local extinction rate", x = "Synchrony") +
-  #   geom_point(aes(y = mean_rate_ext), colour = "red")
-  # 
-  # df %>%
-  #   ggplot(aes(x = p, y = n_est/t_max, colour = beta)) +
-  #   geom_point(position = position_jitterdodge()) +
-  #   facet_wrap(~beta) +
-  #   labs(y = "Local establishment rate", x = "Synchrony") +
-  #   geom_point(aes(y = mean_rate_est), colour = "red")
-  
-  r = r + 1
+  f = f + 1
 }
 
 
+#########################################################
+##               plot simulation results               ##
+#########################################################
+#### PLOT SIMULATION RESULTS TOGETHER 
 
-## MEASURE AND PLOT LAG OVER TIME
-## - how? how to measure niche edge from simulations even?
+## read in and combine all simulation shift data
+files = list.files("outputs/data-processed/range-shift-simulations/cluster/shift-data", full.names = T)
 
-## FIX SCRIPT SO SHIFTING AND NON SHIFTING PERIODS HAPPEN TOGETHER 
-
-## TRY WITH INTERMEDIATE LEVELS OF SYNCHRONY (p=0.5)
-
-## MAKE RANGE WIDER SO THAT EXTINCTION DOESN'T HAPPEN AS QUICKLY WHEN p=1 beta=1
-
-
-
-
-
-
+all_sims <- c()
+for(i in 1:length(files)) {
+  print(paste0("On file no. ", i))
+  all_sims = rbind(all_sims, read.csv(files[i]))
+}
 
 
+#### PLOT RANGES OVER TIME FOR SOME REPS x PARAM COMBINATIONS
+plot_shift_params(all_sims, beta = c(0,1), p = c(0,1))
 
 
-df %>%
-  ggplot(aes(x = new_est)) +
-  geom_bar() +
-  theme(legend.position = "none") +
-  labs(x = "No. of routes", y = "New estabishment?")
 
-## plot range edge (5th and 95th percentile of occupied cells) vs. centre points 
 
-## calculate row of 5th and 95th percentile of occupied cells during each time step
-df <- df %>%
-  filter(Nt != 0) %>%
-  group_by(t) %>%
-  mutate(p95 = quantile(y, c(0.95)),
-         p5 = quantile(y, c(0.05))) %>%
-  ungroup() %>%
-  mutate(range_position = ifelse(y >= p95, "leading-edge",
-                                 ifelse(y <= p5, "trailing-edge", "centre")))
 
-plot(t[[1]])
 
-## calculate extinction and establishment within those cells 
-df %>%
-  gather(key = "measure", value = "count", c(n_ext, n_est)) %>%
-  mutate(measure = ifelse(measure == "n_ext", "Extinctions", "Establishments")) %>%
-  select(x, y, measure, count, range_position) %>%
-  distinct() %>%
-  ggplot(aes(x = count, fill = range_position)) +
-  geom_histogram(position = "dodge") +
-  facet_wrap(~measure) + 
-  labs(x = "No. of local events", y = "Frequency")
+
+
+## NEXT: 
+## add back trailing edge?
+## measure and plot r edge over time 
+
+
+
+
+
+
 
 
 
@@ -740,4 +375,264 @@ df %>%
          p = as.character(p)) %>%
   ggplot(aes(y = surv_resurv_rate, x = beta, colour = p)) +
   geom_point()
+
+
+
+
+
+# calculate_ext_est <- function(all_ranges, threshold) {
+#   ## for each cell, calculate no. ext and est. over time 
+#   ## split by cell
+#   split = all_ranges %>%
+#     group_by(x, y, p, beta) %>%
+#     group_split(.)
+#   
+#   list = lapply(split, FUN = function(df) {
+#     ts = df$Nt
+#     zero_count = 0
+#     ext = 0
+#     est = 0
+#     max_zero_count <- 0
+#     for(i in 1:length(ts)) {
+#       if(i == 1) {
+#         if(ts[i] == 0) {
+#           zero_count = 1
+#         }
+#       }
+#       else if(is.na(ts[i]))  {
+#         if(zero_count > max_zero_count) {
+#           max_zero_count = zero_count
+#         }
+#         zero_count = 0
+#         if(i == length(ts)) {
+#           if(max_zero_count >= threshold) {
+#             ext = ext + 1
+#           }
+#         }
+#       }
+#       else if(ts[i] == 0) {
+#         zero_count = zero_count + 1
+#         if(zero_count > max_zero_count) {
+#           max_zero_count = zero_count
+#         }
+#         if(i == length(ts)) {
+#           if(max_zero_count >= threshold) {
+#             ext = ext + 1
+#           }
+#         }
+#       }
+#       else if(ts[i] >= 1 & max_zero_count >= threshold) {
+#         if(!any(ts[which(!is.na(ts[1:(i-1)]))] != 0) & first(ts) == 0) {
+#           ext = 0
+#         }
+#         else {
+#           ext = ext + 1
+#         }
+#         est = est + 1
+#         zero_count = 0
+#         max_zero_count = 0
+#       }
+#       else if(ts[i] >= 1 & max_zero_count <= threshold) {
+#         zero_count = 0
+#         max_zero_count = 0
+#       }
+#     }
+#     
+#     if(any(ts[which(!is.na(ts))[1:2]] >= 1)) {
+#       new_est = FALSE
+#     }
+#     else {
+#       new_est = TRUE
+#     }
+#     
+#     ext_est = df %>%
+#       mutate(n_est = est, n_ext = ext, new_est = new_est, n_ts = length(ts), p = df$p, beta = df$beta)
+#     
+#     return(ext_est)
+#   })
+#   
+#   ## bind them all 
+#   df <- bind_rows(list)
+#   
+#   ## problem: no. of local extinctions/establishments is lower when range goes completely extinct before 1500 time steps
+#   ## solution: calculate rate of extinction/establishment by dividing it by maximum
+#   
+#   df <- df %>%
+#     group_by(beta, p, t) %>%
+#     filter(!all(Nt == 0)) %>%
+#     group_by(beta, p) %>%
+#     mutate(t_max = max(t),
+#            mean_rate_ext = mean(n_ext/t_max),
+#            mean_rate_est = mean(n_est/t_max)) %>%
+#     ungroup() %>%
+#     select(x, y, n_ext, n_est, p, beta, t_max, mean_rate_ext, mean_rate_est) %>%
+#     distinct()
+#   
+#   ## plot histogram
+#   # df %>%
+#   #   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
+#   #   ggplot(aes(x = n_ext/t_max)) +
+#   #   geom_histogram() +
+#   #   facet_wrap(p~beta) +
+#   #   labs(x = "Local extinction rate", y = "Frequency") +
+#   #   geom_vline(aes(xintercept = mean_rate_ext), colour = "red")
+#   # 
+#   # df %>%
+#   #   mutate(p = paste0("p", p), beta = paste0("beta", beta)) %>%
+#   #   ggplot(aes(x = n_est/t_max)) +
+#   #   geom_histogram() +
+#   #   facet_wrap(p~beta) +
+#   #   labs(x = "Local establishment rate", y = "Frequency") +
+#   #   geom_vline(aes(xintercept = mean_rate_est), colour = "red")
+#   
+#   return(df)
+# }
+
+# est_ext_grid <- function(all_ranges, threshold) {
+#   split = all_ranges %>%
+#     group_by(x, y, p, beta) %>%
+#     group_split(.)
+#   
+#   list = lapply(split, FUN = function(df) {
+#     ts = df$Nt
+#     zero_count = 0
+#     ext = 0
+#     est = 0
+#     max_zero_count <- 0
+#     zero_count_vec <- c()
+#     for(i in 1:length(ts)) {
+#       if(i == 1) {
+#         if(ts[i] == 0) {
+#           zero_count = 1
+#         }
+#       }
+#       else if(is.na(ts[i]))  {
+#         if(zero_count > max_zero_count) {
+#           max_zero_count = zero_count
+#         }
+#         zero_count = 0
+#         if(i == length(ts)) {
+#           if(max_zero_count >= threshold) {
+#             ext = ext + 1
+#           }
+#         }
+#       }
+#       else if(ts[i] == 0) {
+#         zero_count = zero_count + 1
+#         if(zero_count > max_zero_count) {
+#           max_zero_count = zero_count
+#         }
+#         if(i == length(ts)) {
+#           if(max_zero_count >= threshold) {
+#             ext = ext + 1
+#           }
+#         }
+#       }
+#       else if(ts[i] >= 1 & max_zero_count >= threshold) {
+#         if(!any(ts[which(!is.na(ts[1:(i-1)]))] != 0) & first(ts) == 0) {
+#           ext = 0
+#         }
+#         else {
+#           ext = ext + 1
+#         }
+#         est = est + 1
+#         zero_count = 0
+#         max_zero_count = 0
+#       }
+#       else if(ts[i] >= 1 & max_zero_count <= threshold) {
+#         zero_count = 0
+#         max_zero_count = 0
+#       }
+#       zero_count_vec <- append(zero_count_vec, zero_count)
+#     }
+#     
+#     ext = zero_count_vec 
+#     ext[which(ext != 1)] = 0
+#     ext[1] = 0
+#     
+#     est = zero_count_vec 
+#     shifted = zero_count_vec[2:nrow(df)]
+#     est = ifelse(shifted - est[1:(nrow(df) - 1)] < 0, 1, 0) 
+#     est = c(0, est)
+#     
+#     return(data.frame(x = unique(df$x), y = unique(df$y), 
+#                       p = unique(df$p), beta = unique(df$beta), 
+#                       t = 1:nrow(df),
+#                       est = est, ext = ext))
+#     
+#   })
+#   ## bind them all 
+#   df <- bind_rows(list)
+#   
+#   ## left join to other stats
+#   all_ranges = left_join(all_ranges, df)
+#   
+#   return(all_ranges)
+# }
+
+
+
+## calculate mean shift rate and compare to mean climate velocity
+shift_params <- calculate_mean_shift_params(all_ranges = all_ranges)
+
+shift_params %>%
+  mutate(clim_velo = unique(all_ranges$shift_rate)) %>%
+  filter(parameter != "abd_centroid") %>%
+  mutate(p_beta = paste(p, beta, sep = "_")) %>%
+  ggplot(aes(x = parameter, y = shift_rate, colour = p_beta)) +
+  geom_boxplot() +
+  geom_point(aes(x = parameter, y = unique(all_ranges$shift_rate)))
+
+
+## plot ranges in each time step 
+plot_range(range_shift = all_ranges, path = "outputs/figures/range-shifts_dispersal_new")
+
+## calculate extinction and establishment rates
+# df <- calculate_ext_est(all_ranges, threshold = 5)
+# 
+# df %>%
+#   ggplot(aes(x = p, y = n_ext/t_max, colour = beta)) +
+#   geom_point(position = position_jitterdodge()) +
+#   facet_wrap(~beta) +
+#   labs(y = "Local extinction rate", x = "Synchrony") +
+#   geom_point(aes(y = mean_rate_ext), colour = "red")
+# 
+# df %>%
+#   ggplot(aes(x = p, y = n_est/t_max, colour = beta)) +
+#   geom_point(position = position_jitterdodge()) +
+#   facet_wrap(~beta) +
+#   labs(y = "Local establishment rate", x = "Synchrony") +
+#   geom_point(aes(y = mean_rate_est), colour = "red")
+
+
+df %>%
+  ggplot(aes(x = new_est)) +
+  geom_bar() +
+  theme(legend.position = "none") +
+  labs(x = "No. of routes", y = "New estabishment?")
+
+## plot range edge (5th and 95th percentile of occupied cells) vs. centre points 
+
+## calculate row of 5th and 95th percentile of occupied cells during each time step
+df <- df %>%
+  filter(Nt != 0) %>%
+  group_by(t) %>%
+  mutate(p95 = quantile(y, c(0.95)),
+         p5 = quantile(y, c(0.05))) %>%
+  ungroup() %>%
+  mutate(range_position = ifelse(y >= p95, "leading-edge",
+                                 ifelse(y <= p5, "trailing-edge", "centre")))
+
+plot(t[[1]])
+
+## calculate extinction and establishment within those cells 
+df %>%
+  gather(key = "measure", value = "count", c(n_ext, n_est)) %>%
+  mutate(measure = ifelse(measure == "n_ext", "Extinctions", "Establishments")) %>%
+  select(x, y, measure, count, range_position) %>%
+  distinct() %>%
+  ggplot(aes(x = count, fill = range_position)) +
+  geom_histogram(position = "dodge") +
+  facet_wrap(~measure) + 
+  labs(x = "No. of local events", y = "Frequency")
 

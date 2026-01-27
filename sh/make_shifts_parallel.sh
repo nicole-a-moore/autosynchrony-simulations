@@ -1,9 +1,13 @@
 #!/bin/bash
 #SBATCH --account=def-jsunday
-#SBATCH --nodes=1               
-#SBATCH --cpus-per-task=4       
-#SBATCH --mem-per-cpu=32GB
-#SBATCH --time=36:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=32G
+#SBATCH --array=1-24
+#SBATCH --output=logs/%A_%a.out
+#SBATCH --error=logs/%A_%a.err
+#SBATCH --time=60:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user='nicole.moore@mail.mcgill.ca'
 
@@ -16,11 +20,8 @@ module load StdEnv/2020 gcc/9.3.0 udunits/2.2.28  gdal/3.5.1 r/4.2.1 netcdf/4.7.
 echo "Modules loaded."
 which R
 echo "Checking if R script exists..."
-ls -l R/make_CC.R
-
-# Set R library path
-export R_LIBS=~/local/R_libs/
+ls -l run_one_sim.R
 
 echo "Running R script..."
-R CMD BATCH --no-save --no-restore R/make_CC_d.R make_CC_d.Rout
+R CMD BATCH --no-save --no-restore run_one_sim.R 
 echo "Finished running R script."

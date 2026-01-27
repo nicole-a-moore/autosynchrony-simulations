@@ -65,9 +65,6 @@ nc %>%
 
 ## apply the steps to each species
 ########################################
-## 1. for each species, classify data into 10 degree longitude bins
-# bbs_sp = mutate(bbs, Longitude_bin = cut(Longitude, breaks=seq(-180, 180, by = 10)))  
-
 ## for each species, take presences over all years and calculate latitudinal span 
 bounds = bbs %>%
   group_by(AOU) %>%
@@ -76,27 +73,30 @@ bounds = bbs %>%
   ungroup()
 
 bounds_new <- c()
-for(i in 1:length(unique(bounds$AOU))) {
+i = 1
+while(i <= length(unique(bounds$AOU))) {
   temp = filter(bounds, AOU == unique(bounds$AOU)[i])
   temp_wthabs <- filter(bbs, AOU == unique(bounds$AOU)[i])
   
+  ## get min and max longitude of presences
+  x_min <- min(temp$Longitude)
+  x_max <- max(temp$Longitude)
+  
   if(unique(temp$Num_breaks) == 0) {
-    temp_wthabs$Longitude_bin = rep(paste0("(",floor(min(temp$Longitude)), ",", ceiling(max(temp$Longitude)), "]"),  n = nrow(temp))
+    x_min = floor((x_min + 0.25) * 2) / 2 - 0.25
+    x_max = ceiling((x_max + 0.25) * 2) / 2 - 0.25
+    
+    temp_wthabs$Longitude_bin = rep(paste0("(",x_min, ",", x_max, "]"),  n = nrow(temp))
   }
   else if(unique(temp$Num_breaks) == 1) {
-    ## get min and max longitude of presences
-    x_min <- min(temp$Longitude)
-    x_max <- max(temp$Longitude)
+    x_min = floor((x_min + 0.25) * 2) / 2 - 0.25
+    x_max = ceiling((x_max + 0.25) * 2) / 2 - 0.25
     
-    temp_wthabs$Longitude_bin = cut(temp_wthabs$Longitude, breaks = c(floor(x_min),
-                                                               floor(x_min) + (x_max - x_min)/2,
-                                                               ceiling(x_max)))
+    temp_wthabs$Longitude_bin = cut(temp_wthabs$Longitude, breaks = c(x_min,
+                                                                      floor(((x_min + (x_max - x_min)/2) + 0.25) * 2) / 2 - 0.25,
+                                                               x_max))
   }
   else {
-    ## get min and max longitude of presences
-    x_min <- min(temp$Longitude)
-    x_max <- max(temp$Longitude)
-    
     ## get full longitude range
     total_range <- x_max - x_min
     
@@ -106,23 +106,42 @@ for(i in 1:length(unique(bounds$AOU))) {
     ## calc remainder that does not fit into 10-wide bins
     remainder <- total_range - n_full * 10
     
-    first_width = remainder/2
-    last_width = remainder/2
+    first_width = last_width = remainder/2
     
-    first_break = floor(min(temp$Longitude)) + first_width + 10
-    last_break = ceiling(max(temp$Longitude)) + last_width + 10
+    first_break = x_min + first_width + 10
+    last_break = last(seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks)-1)) + last_width 
     
-    ## calculate breaks
-    breaks <- c(floor(min(temp$Longitude)),  first_break, 
-                seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks)-1), 
-                last(seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks) - 1)) + last_width + 10)
+    ## round to nearest 0.25 or 0.75
+    first_break = floor((first_break + 0.25) * 2) / 2 - 0.25
+    last_break = ceiling((last_break + 0.25) * 2) / 2 - 0.25
+    
+    ## if less than 5 degrees remain, add to previous break
+    if(last_width <= 5) {
+      
+      first_val = floor(((first_break - first_width - 10) + 0.25) * 2) / 2 - 0.25
+      last_val = last(seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks)-2)) + last_width
+      last_val = ceiling((last_val + 0.25) * 2) / 2 - 0.25 + 10
+    
+      ## calculate breaks
+      breaks <- c(first_val, first_break, 
+                  seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks)-2), 
+                  last_val)
+    }
+    else {
+      breaks <- c(first_val, floor((x_min + 0.25) * 2) / 2 - 0.25,  first_break, 
+                  seq(first_break + 10, by = 10, length.out = unique(temp$Num_breaks)-1), 
+                  (ceiling(((last(seq(first_break + 10, by = 10, 
+                                     length.out = unique(temp$Num_breaks)-1)) + 0.25) * 2) + last_width) / 2 - 0.25))
+    }
+   
     
     ## cut breaks
-    temp_wthabs$Longitude_bin = cut(temp_wthabs$Longitude, breaks = breaks)
+    temp_wthabs$Longitude_bin = cut(temp_wthabs$Longitude, breaks = breaks, dig.lab = 4)
   }
  
   bounds_new <- rbind(bounds_new, temp_wthabs)                                
   print(i)
+  i = i + 1
 }
   
 ## join back to all data 
@@ -147,7 +166,7 @@ bbs_sp = mutate(bbs_sp, Year = ifelse(Year <= 1980, 1980, Year)) %>%
   distinct() 
 
 ## 3. filter out years of longitudinal bins where there are less than 50 observations/bin/year 
-bbs_sp = bbs_sp %>%  
+bbs_sp_filtered = bbs_sp %>%  
   group_by(AOU, Longitude_bin, Year) %>%
   mutate(routes_sampled_per_year = n()) %>%
   ungroup() %>%
@@ -155,7 +174,7 @@ bbs_sp = bbs_sp %>%
   ungroup()
 
 ## 4. filter out routes in longitudinal bins with less than 50 presences overall, count number of presences in latitudinal bin each year 
-bbs_sp = group_by(bbs_sp, AOU, Longitude_bin) %>%
+bbs_sp_filtered = group_by(bbs_sp_filtered, AOU, Longitude_bin) %>%
   mutate(n_presences = sum(TotalAbd != 0)) %>% 
   filter(n_presences >= 50) %>%
   select(-n_presences) %>%
@@ -170,21 +189,21 @@ bbs_sp = group_by(bbs_sp, AOU, Longitude_bin) %>%
 
 ## 5. measure northern edge of a) species presence and b) sampled routes in each longitudinal bin each year (e.g., mean latitude of 5 most northern cells)
 
-range_edges = bbs_sp %>%
+range_edges = bbs_sp_filtered %>%
   filter(TotalAbd != 0) %>% 
   arrange(AOU, Longitude_bin, -Latitude) %>% 
   ungroup() %>%
   slice(1:5, .by = c("AOU", "Longitude_bin", "Year")) %>%
   group_by(AOU, Longitude_bin, Year) %>%
   summarize(presence_edge = mean(Latitude)) 
-sample_edges = bbs_sp %>%
+sample_edges = bbs_sp_filtered %>%
   arrange(AOU, Longitude_bin, -Latitude) %>% 
   ungroup() %>%
   slice(1:5, .by = c("AOU", "Longitude_bin", "Year")) %>%
   group_by(AOU, Longitude_bin, Year) %>%
   summarize(sample_edge = mean(Latitude)) 
 
-bbs_sp <- left_join(bbs_sp, range_edges) %>%
+bbs_sp_filtered <- left_join(bbs_sp_filtered, range_edges) %>%
   left_join(., sample_edges)
 
 ## old: use 95th percentile instead of mean 5
@@ -196,7 +215,7 @@ bbs_sp <- left_join(bbs_sp, range_edges) %>%
 #   ungroup()
 
 ## 6. get rid of observations where less than 10 sites were sampled north of the northern edge of presence within the bin that year
-bbs_sp = bbs_sp %>%
+bbs_sp_filtered = bbs_sp_filtered %>%
   group_by(AOU, Year, Longitude_bin) %>%
   ## count number of routes sampled beyond presence edge
   mutate(n_north_of_edge = length(which(Latitude > presence_edge))) %>% 
@@ -205,7 +224,7 @@ bbs_sp = bbs_sp %>%
   ungroup()
 
 # 7. get rid of observations more than 1 presences are less than 1 degree latitude below or are higher in latitude than sampling edge within the bin that year
-bbs_sp <- bbs_sp %>%
+bbs_sp_filtered <- bbs_sp_filtered %>%
   group_by(AOU, Year, Longitude_bin) %>%
   mutate(num_above_sample_edge = length(which(Latitude > sample_edge & TotalAbd != 0))) %>% 
   filter(num_above_sample_edge <= 1) %>%
@@ -214,7 +233,7 @@ bbs_sp <- bbs_sp %>%
   gather(key = "type", value = "Latitude_of_edge", c(sample_edge, presence_edge))
 
 ## plot the data that's left (for northern cardinal)
-bbs_sp %>%
+bbs_sp_filtered %>%
   filter(AOU == 5930) %>%
   ggplot(aes(x = Year, y = Latitude_of_edge, colour = type)) +
   geom_point() +
@@ -222,7 +241,12 @@ bbs_sp %>%
   labs(colour = "Edge type")
 
 ## how many species left?
-length(unique(bbs_sp$AOU)) ## 322 species 
+length(unique(bbs_sp_filtered$AOU)) ## 322 species 
+
+## add back filtered out data but flag
+bbs_sp_filtered$keep = 1
+
+bbs_sp = left_join(bbs_sp, bbs_sp_filtered)
 
 ##save data
 write.csv(bbs_sp, "outputs/data-processed/BBS_spatial-filter.csv", row.names = F)
@@ -232,7 +256,8 @@ write.csv(bbs_sp, "outputs/data-processed/BBS_spatial-filter.csv", row.names = F
 ############################################
 ##          map range edge shift          ##
 ############################################
-bbs_sp <- read.csv("outputs/data-processed/BBS_spatial-filter.csv")
+bbs_sp <- read.csv("outputs/data-processed/BBS_spatial-filter.csv") %>%
+  filter(keep == 1)
 
 ## get canada and us map for plotting
 countries <- necountries::countries(c("Canada", "United States of America"), part = TRUE)
@@ -262,7 +287,7 @@ while(sp <= length(unique(bbs$AOU))) {
   ## get sp name
   genus_sp = unique(bbs$genus_sp[which(bbs$AOU == unique(bbs$AOU)[sp])])
   
-  ## subset filtered  bbs routes to species 
+  ## subset filtered bbs routes to species 
   bbs_filtered <- filter(bbs_sp, AOU == unique(bbs$AOU)[sp]) 
   
   ## check if there is data for the species 

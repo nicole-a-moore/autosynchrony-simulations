@@ -20,7 +20,7 @@ simulate_range_shifts <- function(p,
   library(terra)
   library(raster)
   
-  r = 2 # maximum intrinsic rate of increase 
+  r = 1 # maximum intrinsic rate of increase 
   K = 100 # mean carrying capacity 
   d = 0.1 # proportion of offspring dispersing
   icp = 0.1 ## intraspecific competition parameter
@@ -28,7 +28,7 @@ simulate_range_shifts <- function(p,
   reps = 10 # number of replicates per combination of parameters
   nrow=300 # number of rows in species range matrix 
   ncol=10 # number of columns in species range matrix
-  path = "outputs/data-processed/range-shift-simulations" # set path
+  path = "outputs/data-processed/range-shift-simulations_dispersal_lowr" # set path
   shift_rate = 0.2
   rep=1
   
@@ -38,7 +38,7 @@ simulate_range_shifts <- function(p,
   source("R/functions/generate_noise_stable_period.R")
   
   ## create folder for output 
-  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d)
+  path = paste0(path, "/p", p, "_b", beta, "_icp", icp, "_d", d, "_r", r)
   
   if(!dir.exists(path)) {
     dir.create(path, recursive = T)
@@ -90,7 +90,7 @@ simulate_range_shifts <- function(p,
         
         ## position optimum climatic conditions as row 1 on the lattice (Emax)
         opt = 1
-        lattice_E_it[opt,1:10] = Emax + 0.25
+        lattice_E_it[opt,1:10] = Emax + 0.05
         
         # ## assume that conditions decline sigmoidally away from this optimum in both directions
         # lattice_E_it[1:(opt-1),] = Emax*2*rev((1:(opt-1))^s/ ((1:(opt-1))^s + h^s)) 
@@ -98,12 +98,12 @@ simulate_range_shifts <- function(p,
         # #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
         
         ## assume that conditions decline sigmoidally away from this optimum in one direction
-        lattice_E_it[1:opt,] = Emax + 0.25
-        lattice_E_it[(opt+1):nrow,] = (Emax + 0.25)*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] 
+        lattice_E_it[1:opt,] = Emax + 0.05
+        lattice_E_it[(opt+1):nrow,] = (Emax + 0.05)*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)] 
         #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
-
-        ## make growth rate plateau at -0.25
-        lattice_E_it = lattice_E_it - 0.25
+        
+        ## make growth rate plateau at -0.05
+        lattice_E_it = lattice_E_it - 0.05
         #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
         
         ## get distance where r = 0 
@@ -126,12 +126,12 @@ simulate_range_shifts <- function(p,
             ## shift optimum by "step"
             ## shift the optimum climatic conditions on the lattice
             ## assume that conditions decline sigmoidally away from this optimum in one directions
-            lattice_E_it_array[1:new_opt,,(q+500)] = Emax + 0.25
-            lattice_E_it_array[(new_opt+1):nrow,,(q+500)] = (Emax + 0.25)*((1:nrow)^s /
-                                                                        ((1:nrow)^s + h^s))[1:(nrow-(new_opt))]
+            lattice_E_it_array[1:new_opt,,(q+500)] = Emax + 0.05
+            lattice_E_it_array[(new_opt+1):nrow,,(q+500)] = (Emax + 0.05)*((1:nrow)^s /
+                                                                             ((1:nrow)^s + h^s))[1:(nrow-(new_opt))]
             # plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,q])
-            ## make growth rate plateau at -0.25
-            lattice_E_it_array[1:nrow,1:ncol,q] = lattice_E_it_array[1:nrow,1:ncol,q] - 0.25
+            ## make growth rate plateau at -0.05
+            lattice_E_it_array[1:nrow,1:ncol,q+500] = lattice_E_it_array[1:nrow,1:ncol,q+500] - 0.05
           }
           ## otherwise
           else {
@@ -193,11 +193,11 @@ simulate_range_shifts <- function(p,
         }
         
         ## let noise affect r for each cell in the lattice
-        lattice_r_array = (lattice_E_it_array + lattice_ac_it)*r
+        lattice_r_array = (lattice_E_it_array + lattice_ac_it)
         #plot(x = 1:nrow, y = lattice_r_array[1:nrow,1,500])
         
         ## save environmental array as raster
-        filename =  paste0("outputs/data-processed/env-grids/range-shift-grid", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
+        filename =  paste0("outputs/data-processed/env-grids/range-shift-grid_lowr_", rep, "_p", p, "_beta", beta, "_r", r, "_K", K, "_d", 
                            d, "_icp", icp, "_L", L, ".tif")
         writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
         
@@ -261,13 +261,13 @@ simulate_range_shifts <- function(p,
             # ## randomly sample from 1:8
             # sample <- data.frame(num = sample(1:8, dispersers, replace = TRUE))
             
-            ## individuals can disperse into neighbouring 24 cells
-            othercells <- expand.grid(x = c(x-2,x-1,x,x+1,x+2), y = c(y-2,y-1,y,y+1,y+2))
-            othercells = othercells[!(x == othercells$x & y == othercells$y),]
-            othercells$num = 1:24
-
-            ## randomly sample from 1:24
-            sample <- data.frame(num = sample(1:24, dispersers, replace = TRUE))
+            # ## individuals can disperse into neighbouring 24 cells
+            # othercells <- expand.grid(x = c(x-2,x-1,x,x+1,x+2), y = c(y-2,y-1,y,y+1,y+2))
+            # othercells = othercells[!(x == othercells$x & y == othercells$y),]
+            # othercells$num = 1:24
+            # 
+            # ## randomly sample from 1:24
+            # sample <- data.frame(num = sample(1:24, dispersers, replace = TRUE))
             
             # ### LONG-DISTANCE DISPERSAL
             # ## individuals can disperse into any of the neighbouring 230 cells
@@ -276,9 +276,16 @@ simulate_range_shifts <- function(p,
             # othercells = othercells[!(x == othercells$x & y == othercells$y),]
             # othercells$num = 1:230
             
-            # ## randomly sample 
-            # sample <- data.frame(num = sample(1:230, dispersers, replace = TRUE))
+            ### DIRECTIONAL LONG-DISTANCE DISPERSAL
+            ## individuals can disperse into any of the neighbouring 230 cells
+            othercells <- expand.grid(x = c(seq(from = x - 5, to = x-1), x, seq(from = x+1, to = x+5)),
+                                      y = c(y, seq(from = y+1, to = y+10)))
+            othercells = othercells[!(x == othercells$x & y == othercells$y),]
+            othercells$num = 1:120
             
+            ## randomly sample
+            sample <- data.frame(num = sample(1:120, dispersers, replace = TRUE))
+
             othercells <- left_join(sample, othercells, by = "num") %>%
               filter(!(y <= 0 | x <= 0 | y > nrow | x > ncol))
             
@@ -310,22 +317,22 @@ simulate_range_shifts <- function(p,
         y = 1
         while(y <= nrow) {
           N = curr_allpops_new[y,x]
-
+          
           ## when population size is above carrying capacity, density feedback becomes negative
           ## if growth rate is also negative, population will grow
           ## solution: change the model to apply monotonic negative feedback
           ## if growth rate r is negative, flip sign of density dependent term so that when r < 0, population declines even when Nt > K
           effective_r = ifelse(r_curr[y,x] >= 0, (1 - as.complex(N/K)^icp),
                                abs(1 - as.complex(N/K)^icp))
-
-          new_size = round(as.numeric(N*exp(r_curr[y,x]*effective_r)))
-
+          
+          new_size = floor(as.numeric(N*exp(r_curr[y,x]*effective_r)))
+          
           if(is.na(new_size) || new_size < 0 || is.infinite(new_size)) {
             new_size = 0
           }
-
+          
           new_sizes[y,x] = new_size
-
+          
           ## add demographic stochasticity by sampling # offspring from a poisson distribution where mean depends on N, r, icp, and K
           new_sizes[y,x] = sample(rpois(new_sizes[y,x], n = 1000), size = 1)
           
@@ -335,7 +342,7 @@ simulate_range_shifts <- function(p,
           # 
           # ## add demographic stochasticity
           # new_sizes[y,x] = sample(rpois(new_sizes[y,x], n = 1000), size = 1)
-           
+          
           y = y + 1
         }
         x = x + 1
@@ -360,8 +367,9 @@ simulate_range_shifts <- function(p,
       }
     }
     
+  t
   }
- }
+}
 
 
 

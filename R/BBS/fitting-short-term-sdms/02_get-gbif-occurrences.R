@@ -14,7 +14,7 @@ extract = terra::extract
 ## start with: Passerella_iliaca
 
 ## wipe old occurrences 
-file.remove(list.files("outputs/data-processed/gbif-occurrences/", full.names = TRUE))
+##file.remove(list.files("outputs/data-processed/gbif-occurrences/", full.names = TRUE))
 
 
 ####################################
@@ -87,16 +87,26 @@ while(i <= length(backbones)) {
   i = i + 1
 }
 
-## add species name to download keys and save 
-dkeys = data.frame(download_keys = dkeys, canonicalName = sp)
-write.csv(dkeys, "outputs/data-processed/gbif-requests/gbif-download-keys.csv", row.names = F)
 
 
 ####################################
 #     FILTER GBIF OCCURRENCES      #
 ####################################
 ## read in download list
-dkeys = read.csv("outputs/data-processed/gbif-requests/gbif-download-keys.csv")
+dkeys = c()
+dlist = list.files("outputs/data-processed/gbif-requests", full.names = T)
+dlist = dlist[-which(str_detect(dlist, "gbif-download-keys.csv"))]
+sp = str_split_fixed(dlist, "gbif_request_",2)[,2]
+sp = str_split_fixed(sp, "\\.csv",2)[,1]
+for(i in 1:length(dlist)) {
+  cur = read.csv(dlist[i])
+  dkeys = rbind(dkeys, data.frame(download_keys = cur$download_key, sp = str_replace_all(sp[i], "\\-", " ")))
+}
+
+## filter out ones that have already been filtered
+files = paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
+       str_replace_all(dkeys$sp, "\\ ", "\\_"), "_distinct.csv")
+dkeys = dkeys[!file.exists(files),]
 
 ## read in climate data mask
 mask <- rast("outputs/data-processed/weather-vars/mask.tiff")
@@ -108,71 +118,78 @@ while(f <= nrow(dkeys)) {
   
   ## unzip and read in raw occurrences 
   unzip(paste0("/Volumes/NIKKI/gbif-occurrences/", dkeys$download_keys[f], ".zip"), exdir = "/Volumes/NIKKI/gbif-occurrences/") # unzip file
-  occ <- fread(paste0("/Volumes/NIKKI/gbif-occurrences/", dkeys$download_keys[f], ".csv"))
+  occ <- fread(paste0("/Volumes/NIKKI/gbif-occurrences/", dkeys$download_keys[f], ".csv"), quote="")
   
-  ## 1. use coordinate cleaner to flag issues with occurrences 
+  ## check if already done:
   #############################################################
-  ## convert country code from ISO2c to ISO3c
-  occ$countryCode <-  countrycode(occ$countryCode, 
-                                  origin =  'iso2c',
-                                  destination = 'iso3c')
+  file_exists = file.exists(paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
+                                   str_replace_all(dkeys$sp[f], "\\ ", "\\_"), "_distinct.csv"))
   
-  ## convert to dataframe
-  occ = as.data.frame(occ)
-  
-  flags <- clean_coordinates(x = occ, 
-                             lon = "decimalLongitude", 
-                             lat = "decimalLatitude",
-                             species = "species",
-                             tests = c("capitals", "centroids"),
-                             capitals_rad = 1000,
-                             centroids_rad = 1000) 
-  
-  ## exclude flagged data from occurrences
-  occ <- occ[flags$.summary,]
-  
-  ## 2. filter to locations with CRU TS data
-  ###########################################
-  occ <- select(occ, decimalLongitude, decimalLatitude, species, year, month) %>%
-    mutate(gbif_lon = decimalLongitude, gbif_lat = decimalLatitude)
-  occ_vect = vect(occ, geom = c("decimalLongitude", "decimalLatitude"))
-  crs(occ_vect) = crs(mask)
-  
-  ## remove occurrences outside of mask 
-  vals <- extract(mask, occ_vect)
-  occ_vect <- occ_vect[!is.na(vals[,2]), ]
-  
-  ## 3. get cell coordinates within CRU TS data
-  #############################################
-  ## get coordinates of raster cells of occurrences
-  cell_ids <- cellFromXY(mask, geom(occ_vect)[,c(3,4)])
-  cell_xy <- xyFromCell(mask, cell_ids)
-  occ_vect$x <- cell_xy[,1]
-  occ_vect$y <- cell_xy[,2]
-  
-  occ = as.data.frame(occ_vect)
-  
-  ## save only occurrences in distinct months x years x cells 
-  occ_distinct = select(occ, -gbif_lon, -gbif_lat) %>%
-    distinct()
-  
-  ## 4. filter to species with more than 30 occurrences 
-  ######################################################
-  if(nrow(occ_distinct) > 30) {
+  if(!file_exists) {
+    ## 1. use coordinate cleaner to flag issues with occurrences 
+    #############################################################
+    ## convert country code from ISO2c to ISO3c
+    occ$countryCode <-  countrycode(occ$countryCode, 
+                                    origin =  'iso2c',
+                                    destination = 'iso3c')
     
-    ## 5. filter to species that Nikki and Maxence love
+    ## convert to dataframe
+    occ = as.data.frame(occ)
+    
+    flags <- clean_coordinates(x = occ, 
+                               lon = "decimalLongitude", 
+                               lat = "decimalLatitude",
+                               species = "species",
+                               tests = c("capitals", "centroids"),
+                               capitals_rad = 1000,
+                               centroids_rad = 1000) 
+    
+    ## exclude flagged data from occurrences
+    occ <- occ[flags$.summary,]
+    
+    ## 2. filter to locations with CRU TS data
+    ###########################################
+    occ <- select(occ, decimalLongitude, decimalLatitude, species, year, month) %>%
+      mutate(gbif_lon = decimalLongitude, gbif_lat = decimalLatitude)
+    occ_vect = vect(occ, geom = c("decimalLongitude", "decimalLatitude"))
+    crs(occ_vect) = crs(mask)
+    
+    ## remove occurrences outside of mask 
+    vals <- extract(mask, occ_vect)
+    occ_vect <- occ_vect[!is.na(vals[,2]), ]
+    
+    ## 3. get cell coordinates within CRU TS data
+    #############################################
+    ## get coordinates of raster cells of occurrences
+    cell_ids <- cellFromXY(mask, geom(occ_vect)[,c(3,4)])
+    cell_xy <- xyFromCell(mask, cell_ids)
+    occ_vect$x <- cell_xy[,1]
+    occ_vect$y <- cell_xy[,2]
+    
+    occ = as.data.frame(occ_vect)
+    
+    ## save only occurrences in distinct months x years x cells 
+    occ_distinct = select(occ, -gbif_lon, -gbif_lat) %>%
+      distinct()
+    
+    ## 4. filter to species with more than 30 occurrences 
     ######################################################
-    
-    ## 6. save
-    #######################################
-    ## write out 
-    # write.csv(occ, paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
-    #                                str_replace_all(dkeys$canonicalName[f], "\\ ", "\\_"), ".csv"), row.names = F)
-    write.csv(occ_distinct, paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
-                                  str_replace_all(dkeys$canonicalName[f], "\\ ", "\\_"), "_distinct.csv"), row.names = F)
-  }
-  else {
-    lessthan30 <- append(lessthan30, dkeys$canonicalName[f])
+    if(nrow(occ_distinct) > 30) {
+      
+      ## 5. filter to species that Nikki and Maxence love
+      ######################################################
+      
+      ## 6. save
+      #######################################
+      ## write out 
+      # write.csv(occ, paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
+      #                                str_replace_all(dkeys$canonicalName[f], "\\ ", "\\_"), ".csv"), row.names = F)
+      write.csv(occ_distinct, paste0("/Volumes/NIKKI/gbif-occurrences_filtered/", 
+                                     str_replace_all(dkeys$sp[f], "\\ ", "\\_"), "_distinct.csv"), row.names = F)
+    }
+    else {
+      lessthan30 <- append(lessthan30, dkeys$sp[f])
+    }
   }
   
   ## remove unzipped file 
@@ -180,6 +197,9 @@ while(f <= nrow(dkeys)) {
   
   f = f + 1
 }
+
+## any species excluded because they had <30 occurrences?
+lessthan30
 
 
 

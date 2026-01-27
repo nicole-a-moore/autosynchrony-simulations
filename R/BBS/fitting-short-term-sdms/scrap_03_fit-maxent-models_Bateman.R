@@ -39,12 +39,7 @@ nrow(data) == nrow(bkgd)
 
 data <- select(data, presence, lon, lat, everything())
 
-
-
-
 ## idea: use all presences to train maxent model for training and verify with bbs data 
-
-
 # Regularization values: linear/quadratic/product: 0.050, categorical: 0.250, threshold: 1.000, hinge: 0.500
 # Feature types used: product linear quadratic
 # responsecurves: true
@@ -62,7 +57,7 @@ data <- select(data, presence, lon, lat, everything())
 ## fit the model
 weather = data[,c(5:ncol(data))]
 presences = data[,c(1)]
-weather$month = as.factor(weather$month)
+#weather$month = as.factor(weather$month)
   
 maxent_mod <- maxent(x = weather, p = presences, 
                      path = "outputs/data-processed/maxent-results/",
@@ -75,13 +70,13 @@ maxent_mod <- maxent(x = weather, p = presences,
                               "nothreshold",
                               "nohinge"))
 
-
-
-
-
-
 ## predict 
 pred <- predict(maxent_mod, bioclim_data)  
+
+weather 
+
+
+
 
 ## plot predictions - suitability
 suit = map %>%

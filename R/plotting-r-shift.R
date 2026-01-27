@@ -53,7 +53,7 @@ r_df %>%
 
 
 ## try with an env grid
-env_grid = rast("outputs/data-processed/env-grids/range-shift-grid1_p0_beta0_r1.2_K100_d0.1_icp0.1_L2000.tif")
+env_grid = rast("outputs/data-processed/env-grids/range-shift-grid1_p0_beta0_r2_K100_d0.1_icp0.1_L2000.tif")
 
 array = as.array(env_grid)
 
@@ -77,7 +77,7 @@ for(t in 50:1950) {
 ## apply threshold and calculate 5th and 95th percentiles
 r_df <- r_df %>%
   group_by(t) %>%
-  mutate(p95 = quantile(.$lat[which(r >= 1)], 0.95),
+  mutate(p95 = quantile(.$lat[which(r >= 0)], 0.95),
          p5 = quantile(.$lat[which(r >= 0)], 0.05),
          peak_r = mean(.$lat[which(r == max(r))])) %>%
   ungroup()

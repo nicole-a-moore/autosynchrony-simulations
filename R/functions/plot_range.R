@@ -22,8 +22,8 @@ plot_range = function(range_shift, path) {
       max_suit = data.frame(time = 1:n_ts,
                             max_suit = c(rep(41, length.out = 500), shift_rate*(1:(n_ts-500)) + 41))
       
-      time = 1
-      while(time <= n_ts) {
+      time = 500
+      while(time <= 2000) {
         
         ## filter to time t
         cur = range_shift_sub %>%
@@ -49,7 +49,7 @@ plot_range = function(range_shift, path) {
             coord_fixed() +
             theme_void() +
             labs(fill = "") +
-            scale_fill_continuous(limits = c(0, 200), type = "viridis", na.value = "white") +
+            scale_fill_continuous(limits = c(0, 300), type = "viridis", na.value = "white") +
             theme(panel.border = element_rect(colour = "black", fill = NA)) +
             geom_hline(yintercept = params$q95_y, colour = "forestgreen") +
             geom_hline(yintercept = max_suit$max_suit[which(max_suit$time == time)], colour = "red") 

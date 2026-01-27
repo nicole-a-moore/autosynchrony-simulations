@@ -4,6 +4,7 @@ library(terra)
 library(raster)
 library(sf)
 theme_set(theme_bw())
+select = dplyr::select
 
 ## read in clean bbs data
 bb =  read.csv("outputs/data-processed/bbs_clean-subset.csv")
@@ -45,9 +46,9 @@ plot(polys)
 
 st_crs(polys) = st_crs(countries)
 
-#######################################
+###################################
 ##          range shift          ##
-#######################################
+###################################
 ## plot 
 absences = filter(cc, TotalAbd == 0) %>%
   select(geometry) %>%

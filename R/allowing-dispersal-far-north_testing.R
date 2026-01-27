@@ -1,6 +1,7 @@
 ## simulate range shift: 
 ## 1. generate a stable range for 500 time steps
 ## 2. begin shifting the suitability gradient
+
 simulate_range_shifts <- function(p,
                                   beta,
                                   r = 1, # maximum intrinsic rate of increase 

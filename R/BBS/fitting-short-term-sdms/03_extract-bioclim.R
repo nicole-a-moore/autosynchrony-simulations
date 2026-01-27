@@ -1,23 +1,15 @@
-## extract values of seasonal bioclimatic variables at GBIF occurrences 
+## combine all bioclim layers into a data frame & extract values at all coordinates of the background layer 
 library(tidyverse)
 library(terra)
 extract = terra::extract
 
-## match date and year of occurrence to proper month of bioclimatic variables:
-
-## data format output:
-## species, lon, lat, month, bioclim_6m, bioclim_xx, etc.
-
-## prepare background data (combine all species-level data into one dataframe and keep distinct rows)
-
-## prep occurrences 
-################################################
-occ_df <- read.csv("outputs/data-processed/gbif-occurrences/occ_df.csv")
-
-## prep bioclim layers  
-################################################
+#########################################
+##         PREP BIOCLIM LAYERS         ##
+#########################################
 files = list.files("outputs/data-processed/weather-vars", full.names = T)
 files = files[-which(str_detect(files, "mask"))]
+files = files[-which(str_detect(files, ".csv"))]
+files = files[-which(str_detect(files, "date"))]
 
 i = 1
 while(i <= length(files)) {
@@ -56,8 +48,9 @@ while(i <= length(files)) {
 write.csv(bioclim, "outputs/data-processed/weather-vars/all_vars.csv", row.names = F)
 
 
-## join to occurrence data   
-################################################
+#########################################
+##         MAKE BACKGROUND LAYER       ##
+#########################################
 ## get names of occurrence files 
 occ_files = list.files("/Volumes/NIKKI/gbif-occurrences_filtered", full.names = T)
 
@@ -75,13 +68,7 @@ while(i <= length(occ_files)) {
   bkgd <- rbind(bkgd, select(occ, -species)) %>%
     distinct()
   
-  ## left join bioclim data to occurrences 
-  occ <- left_join(occ, bioclim, by = c("year", "month", "x", "y"))
   
-  ## save
-  write.csv(occ, paste0("/Volumes/NIKKI/occurrences-x-bioclim/", 
-                        str_replace_all(unique(occ$species), "\\ ", "\\_"),
-                        "_bioclim.csv"), row.names = F)
   print(i)
   i = i + 1
 }
@@ -90,7 +77,7 @@ while(i <= length(occ_files)) {
 bkgd <- left_join(bkgd, bioclim, by = c("year", "month", "x", "y"))
 
 ## write:
-write.csv(bkgd, "/Volumes/NIKKI/occurrences-x-bioclim/background_bioclim.csv", row.names = F)
+write.csv(bkgd, "/Volumes/NIKKI/background_bioclim.csv", row.names = F)
 
 
 

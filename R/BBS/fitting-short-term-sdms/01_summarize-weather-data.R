@@ -25,9 +25,16 @@ select = dplyr::select
 ## for each 6 month, 12 month, and 36 month period proceeding each month 
 ## ** precip of driest and wetest quarter not calculated for 6 month period
 ############################################################################
+ 
 
 dates = paste(rep(1951:2024, each = 12), rep(1:12, n = 888/12), sep = "_")
 breeding_months = which(str_split_fixed(dates, "\\_", 2)[,2] %in% c(4,5,6,7))
+
+## make shapefile for countries
+countries <- necountries::countries(c("Canada", "United States of America"), part = TRUE)
+countries <- sf::st_union(countries)
+countries <- vect(countries)
+
 
 ##############################
 ##           TMP            ##
@@ -66,6 +73,14 @@ avgtmp_36m = avgtmp_36m[[breeding_months]]
 tmpseas_6m = tmpseas_6m[[breeding_months]]
 tmpseas_12m = tmpseas_12m[[breeding_months]]
 tmpseas_36m = tmpseas_36m[[breeding_months]]
+
+## crop to north america
+avgtmp_6m = mask(avgtmp_6m, countries)
+avgtmp_12m = mask(avgtmp_12m, countries)
+avgtmp_36m = mask(avgtmp_36m, countries)
+tmpseas_6m = mask(tmpseas_6m, countries)
+tmpseas_12m = mask(tmpseas_12m, countries)
+tmpseas_36m = mask(tmpseas_36m, countries)
 
 ## save tmp layers
 ######################
@@ -124,6 +139,14 @@ tmx_6m = tmx_6m[[breeding_months]]
 tmx_12m = tmx_12m[[breeding_months]]
 tmx_36m = tmx_36m[[breeding_months]]
 
+## crop to north america
+tmn_6m = mask(tmn_6m, countries)
+tmn_12m = mask(tmn_12m, countries)
+tmn_36m = mask(tmn_36m, countries)
+tmx_6m = mask(tmx_6m, countries)
+tmx_12m = mask(tmx_12m, countries)
+tmx_36m = mask(tmx_36m, countries)
+
 ## save tmx and tmn layers
 ######################
 writeRaster(tmx_6m, "outputs/data-processed/weather-vars/tmx_6m.tiff", overwrite = T)
@@ -161,6 +184,11 @@ names(annualpre_36m) = paste0("annualpre_36m_", dates)
 annualpre_6m = annualpre_6m[[breeding_months]]
 annualpre_12m = annualpre_12m[[breeding_months]]
 annualpre_36m = annualpre_36m[[breeding_months]]
+
+## crop to north america
+annualpre_6m = mask(annualpre_6m, countries)
+annualpre_12m = mask(annualpre_12m, countries)
+annualpre_36m = mask(annualpre_36m, countries)
 
 ## save annual pre layers
 ###########################
@@ -220,6 +248,12 @@ prewet_36m = prewet_36m[[breeding_months]]
 predry_12m = predry_12m[[breeding_months]]
 predry_36m = predry_36m[[breeding_months]]
 
+## crop to north america
+prewet_12m = mask(prewet_12m, countries)
+prewet_36m = mask(prewet_36m, countries)
+predry_12m = mask(predry_12m, countries)
+predry_36m = mask(predry_36m, countries)
+
 ## save quarterly pre layers
 ###########################
 writeRaster(prewet_12m, "outputs/data-processed/weather-vars/prewet_12m.tiff", overwrite = T)
@@ -254,6 +288,11 @@ names(preseas_36m) = paste0("preseas_36m_", dates)
 preseas_6m = preseas_6m[[breeding_months]]
 preseas_12m = preseas_12m[[breeding_months]]
 preseas_36m = preseas_36m[[breeding_months]]
+
+## crop to north america
+preseas_6m = mask(preseas_6m, countries)
+preseas_12m = mask(preseas_12m, countries)
+preseas_36m = mask(preseas_36m, countries)
 
 ## save seasonal pre layers
 ###########################

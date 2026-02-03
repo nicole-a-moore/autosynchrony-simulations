@@ -217,7 +217,7 @@ simulate_range_shifts_both_edges <- function(p,
       #plot(x = 1:2000, y = lattice_r_array[150,1,1:2000])
       
       ## save environmental array as raster
-      filename =  paste0("outputs/data-processed/env-grids/range-shift-grid_both-edges_rep", rep, "_p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
+      filename =  paste0("outputs/data-processed/env-grids/range-shift-grid_both-edges_linear_rep", rep, "_p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
                          d, "_r", r, "_d-dist", d_dist, "_sigma", sigma, "_shift-rate", shift_rate,  ".tif")
       writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
       
@@ -356,4 +356,4 @@ simulate_range_shifts_both_edges <- function(p,
       t = t + 1
     }
   }
-≤.}
+}

@@ -4,7 +4,7 @@ library(tidyverse)
 terraOptions(threads = 1)
 
 ## load simulation function
-source("01_simulate-range-shifts_cluster.R")
+source("01_simulate-range-shifts_less-steep.R")
 
 ## list all parameters to vary
 beta <- c(0, 1)
@@ -33,7 +33,7 @@ task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID"))
 params <- sims[task_id, ]
 
 ## output directory
-outdir <- file.path(paste0("output/simulations/p", params$p, "_b", params$beta, "_icp", params$icp, "_K", params$K, "_d", 
+outdir <- file.path(paste0("output_less-steep/simulations/p", params$p, "_b", params$beta, "_icp", params$icp, "_K", params$K, "_d", 
                            params$d, "_r", params$r, "_d-dist", params$d_dist, "_sigma", params$sigma, "_shift-rate", params$shift_rate))
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 

@@ -133,14 +133,37 @@ beta_1_async_df1 = data.frame(time = 1:1500, signal =  first[501:2000], beta = 0
 beta_1_async_df2 = data.frame(time = 1:1500, signal = second[501:2000], beta = 1)
 
 
-beta_1_async_df1 %>%
+synchrony_plot <- beta_1_async_df1 %>%
   mutate(beta = as.character(beta)) %>%
   filter(time <= 365) %>%
   ggplot(aes(x = time, y = signal)) +
   geom_line(linewidth = 0.25, colour = "black") +
-  geom_line(data = beta_1_async_df2 %>% filter(time <= 365), aes(x = time, y = signal), colour = "red") +
+  geom_line(data = beta_1_async_df2 %>% filter(time <= 365), aes(x = time, y = signal+0.5), colour = "#1875a5ff") +
   theme(panel.grid = element_blank(), 
         rect = element_rect(fill = "transparent"),
         panel.background = element_rect(fill = "transparent")) +
   theme(legend.position = "none") +
   labs(x = "Time (days)", y = "Environment")
+
+
+beta_1_sync_df1 <- filter(beta_1_sync_df1, time<= 365) 
+beta_1_sync_df1_new = beta_1_sync_df1
+
+beta_1_sync_df1_new$signal<- c(beta_1_sync_df1$signal[201:365], beta_1_sync_df1$signal[1:200]) 
+
+asynchrony_plot = beta_1_async_df1 %>%
+  mutate(beta = as.character(beta)) %>%
+  filter(time <= 365) %>%
+  ggplot(aes(x = time, y = signal)) +
+  geom_line(linewidth = 0.25, colour = "black") +
+  geom_line(data = beta_1_sync_df1_new %>% filter(time <= 365), aes(x = time, y = signal +1), colour = "#4fb2e5ff") +
+  theme(panel.grid = element_blank(), 
+        rect = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent")) +
+  theme(legend.position = "none") +
+  labs(x = "Time (days)", y = "Environment")
+
+
+ggsave(asynchrony_plot, width = 3, height = 2, path = "outputs/figures/didactic", filename = "asynchrony_plot.png")
+ggsave(synchrony_plot, width = 3, height = 2, path = "outputs/figures/didactic", filename = "synchrony_plot.png")
+

@@ -1,22 +1,21 @@
 library(terra)
 
-r = rast("outputs/data-processed/env-grids/range-shift-grid_new_1_p0_beta1_r1_K200_d0.2_icp0.7_L2000.tif")
+r = rast("outputs/data-processed/env-grids/range-shift-grid_both-edges_rep1_p0_b0_icp0.7_K200_d0.2_r1_d-dist1_sigma0.5_shift-rate0.2.tif")
 
-plot(r[[200]])
+plot(r[[300]])
 
 lattice_r_array = as.array(r)
 
 test = rast(arr)
 
 
-t = unlist(c(r[1,1,]))
+t = unlist(c(r[150,1,]))
 
 df =data.frame(t = t, x = 1:2000)
 
 df %>%
   ggplot(aes(x = x, y = t)) +
   geom_line()
-
 
 mean(t)
 

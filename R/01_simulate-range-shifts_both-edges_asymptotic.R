@@ -16,22 +16,6 @@ simulate_range_shifts_both_edges <- function(p,
                                   shift_rate ## set shift rate
 ) {
   
-  # p = 0
-  # beta = 1
-  # d = 0.2
-  # d_dist = 7
-  # nrow = 300
-  # ncol = 10
-  # L = 2000
-  # shift_rate = 0.2
-  # sigma = 0.5
-  # icp = 0.7
-  # K = 200
-  # r = 1
-  # path = file.path(paste0("outputs/data-processed/simulations_both-edges_asymptotic/raw-sims/p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
-  #                       d, "_r", r, "_d-dist", d_dist, "_sigma", sigma, "_shift-rate", shift_rate))
-  # 
-  
   rep = 1
   
   print("Starting!")
@@ -94,7 +78,7 @@ simulate_range_shifts_both_edges <- function(p,
       lattice_E_it[1:(opt-1),] = rev((Emax + 0.05)*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(opt-1)])
       lattice_E_it[(opt+1):nrow,] = (Emax + 0.05)*((1:nrow)^s / ((1:nrow)^s + h^s))[1:(nrow-opt)]
       #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
-      
+     
       # ## position optimum climatic conditions as row 20 on the lattice (Emax)
       # opt = 20
       # lattice_E_it[opt,1:10] = Emax 
@@ -103,7 +87,6 @@ simulate_range_shifts_both_edges <- function(p,
       # lattice_E_it[(opt+1):nrow,] = (1:length((opt+1):nrow)*-0.1 + Emax)[1:(nrow-opt)]
       # lattice_E_it[1:(opt-1),] = rev((1:length(1:(opt-1))*-0.1 + Emax)[1:(opt-1)])
       # #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
-      
       
       ## replicate latitudinal gradient L times 
       lattice_E_it_array <- replicate(L, lattice_E_it)
@@ -153,6 +136,41 @@ simulate_range_shifts_both_edges <- function(p,
       }
       #plot(x = 1:nrow, y = lattice_E_it_array[1:nrow,1,1000])
       
+      
+      # # make plot of r versus row for didactic figure
+      # df = data.frame(Row = 1:nrow, r = lattice_E_it_array[1:nrow,1,1], r2 = lattice_E_it_array[1:nrow,1,550],
+      #                 r3 = lattice_E_it_array[1:nrow,1,600], r4 = lattice_E_it_array[1:nrow,1,650],
+      #                 r5 = lattice_E_it_array[1:nrow,1,700])
+      # gg = df %>%
+      #   ggplot(aes(x = Row, y = r)) +
+      #   geom_line() +
+      #   theme_bw()+
+      #   theme(panel.grid = element_blank(), panel.border = element_blank()) +
+      #   scale_y_continuous(expand = c(0,0.1), breaks = c(0, 0.25, 0.50, 0.75, 1), labels = c("0.0", 0.25, "0.50", 0.75, "1.0"))+
+      #   scale_x_continuous(expand = c(0, 0.1), labels = c(0, 100, 200, 300), breaks =c(0, 100, 200, 300)) +
+      #   geom_line(aes(y = r2), colour = "grey") +
+      #   geom_line(aes(y = r3), colour = "lightgrey", alpha = 0.7)+
+      #   geom_line(aes(y = r4), colour = "lightgrey", alpha = 0.4)+
+      #   geom_line(aes(y = r5), colour = "lightgrey", alpha = 0.1)
+      # 
+      # 
+      #   ggsave(gg, path = "outputs/figures/didactic", filename = "r-across-rows.png", height = 2, width = 9)
+
+      
+      # ## make plot of r during first time period 
+      # ras = rast(lattice_E_it_array[,,1])
+      # plot(ras)
+      # 
+      # gg = ras %>%
+      #   ggplot() +
+      #   geom_spatraster(data = ras) +
+      #   theme_bw() +
+      #   scale_fill_viridis_c() +
+      #   labs(fill = "r") +
+      #   theme_void()
+      #   
+      # ggsave(gg, path = "outputs/figures/didactic", filename = "r-across-grid.png", width = 2, height = 9)
+      
       ## make growth rate plateau at -0.05
       #lattice_E_it = lattice_E_it - 0.05
       #plot(x = 1:nrow, y = lattice_E_it[1:nrow,1])
@@ -160,9 +178,8 @@ simulate_range_shifts_both_edges <- function(p,
       #min(lattice_E_it)
       
       ## get distance where r = 0 
-      first(which(lattice_E_it[,1] <= 0))
-      ## row 75
-
+      # first(which(lattice_E_it[,1] <= 0))
+      
       ## create noise time series for each cell, L time steps long
       lattice_ac_it = array(dim = c(nrow,ncol,L))
       
@@ -174,6 +191,61 @@ simulate_range_shifts_both_edges <- function(p,
                               L2 = L - 500,
                               sigma = sigma)
       
+      # # make plot of noise
+      # df = data.frame(t = 1:2000, Noise = unlist(noise[[1]]))
+      # 
+      # n = df %>%
+      #   ggplot(aes(x = t, y = Noise)) +
+      #   geom_line(linewidth = 0.1) +
+      #   theme_bw()+
+      #   theme(panel.grid = element_blank(), panel.border = element_blank(),
+      #         axis.line.x = element_line(), axis.line.y = element_line(),
+      #         panel.background = element_rect(fill = "transparent", colour = NA),
+      #         plot.background = element_rect(fill = "transparent", colour = NA),
+      #         legend.background = element_rect(fill = "transparent"), 
+      #         legend.box.background = element_rect(fill = "transparent"))+
+      #   scale_y_continuous(limits = c(-0.5, 1.5))
+      # 
+      # 
+      #   ggsave(n, path = "outputs/figures/didactic", filename = "noise-across-time.png", height = 2, width = 4.5)
+      # 
+      # ## make plot of r across time
+      # df = data.frame(t = 1:2000, r = lattice_E_it_array[50,1,1:2000])
+      # 
+      # r_plot = df %>%
+      #   ggplot(aes(x = t, y = r)) +
+      #   geom_line(linewidth = 0.3) +
+      #   theme_bw()+
+      #   theme(panel.grid = element_blank(), panel.border = element_blank(),
+      #         axis.line.x = element_line(), axis.line.y = element_line(),
+      #         panel.background = element_rect(fill = "transparent", colour = NA),
+      #         plot.background = element_rect(fill = "transparent", colour = NA),
+      #         legend.background = element_rect(fill = "transparent"), 
+      #         legend.box.background = element_rect(fill = "transparent"))+
+      #   scale_y_continuous(limits = c(-0.5, 1.5))
+      # 
+      # 
+      #   ggsave(r_plot, path = "outputs/figures/didactic", filename = "r-across-time.png", height = 2, width = 4.5)
+      # 
+      #   ## make plot of r across time
+      #   df = data.frame(t = 1:2000, r = lattice_E_it_array[50,1,1:2000] + unlist(noise[[1]]))
+      # 
+      # r_noise_plot = df %>%
+      #     ggplot(aes(x = t, y = r)) +
+      #     geom_line(linewidth = 0.1) +
+      #     theme_bw()+
+      #     theme(panel.grid = element_blank(), panel.border = element_blank(),
+      #           axis.line.x = element_line(), axis.line.y = element_line(),
+      #           panel.background = element_rect(fill = "transparent", colour = NA),
+      #           plot.background = element_rect(fill = "transparent", colour = NA),
+      #           legend.background = element_rect(fill = "transparent"), 
+      #           legend.box.background = element_rect(fill = "transparent")) +
+      #   labs(y = "r plus noise")+
+      #   scale_y_continuous(limits = c(-0.5, 1.5))
+      # 
+      # 
+      #   ggsave(r_noise_plot, path = "outputs/figures/didactic", filename = "r-noise-across-time.png", height = 2, width = 4.5)
+
       ## verify the degree of autocorrelation and synchrony: 
       ## calculate mean measured spectral exponent for each time series
       beta_star =  mean(sapply(noise[[2]], cbind))
@@ -211,7 +283,7 @@ simulate_range_shifts_both_edges <- function(p,
       #plot(x = 1:2000, y = lattice_r_array[150,1,1:2000])
       
       ## save environmental array as raster
-      filename =  paste0("output/env-grids/range-shift-grid_both-edges_asym_rep", rep, "_p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
+      filename =  paste0("output_both-edges/env-grids/range-shift-grid_both-edges_asym_rep", rep, "_p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
                          d, "_r", r, "_d-dist", d_dist, "_sigma", sigma, "_shift-rate", shift_rate,  ".tif")
       writeRaster(rast(lattice_r_array), filename, overwrite = TRUE)
       
@@ -350,4 +422,34 @@ simulate_range_shifts_both_edges <- function(p,
       t = t + 1
     }
   }
+  
+  ############################################
+  #### ORGANIZE OUTPUT INTO A SINGLE FILE ####
+  ############################################
+  ## make a folder to store results
+  dir = "output_both-edges/sim-results"
+  if(!dir.exists(dir)) {
+    dir.create(dir, recursive = T)
+  }
+  
+  ## get list of output files 
+  files = list.files(new_path, full.names = T)
+  
+  all_ranges = c()
+  i=1
+  while(i <= length(files)) {
+    all_ranges = rbind(all_ranges, read.csv(files[i]))
+    i = i + 1
+  }
+  
+  if(!is.null(nrow(all_ranges))) {
+    write.csv(all_ranges, 
+              paste0(dir, "/range-shifts_p", p, "_b", beta, "_icp", icp, "_K", K, "_d", 
+                           d, "_r", r, "_d-dist", d_dist, "_sigma", sigma, "_shift-rate", shift_rate, "_rep", r, ".csv"),
+              row.names = FALSE)
+  }
+  
+  ## delete intermediate files 
+  file.remove(files)
+
 }

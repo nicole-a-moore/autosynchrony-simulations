@@ -4,10 +4,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=1-24
+#SBATCH --array=1-120
 #SBATCH --output=logs/%A_%a.out
 #SBATCH --error=logs/%A_%a.err
-#SBATCH --time=60:00:00
+#SBATCH --time=300:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user='nicole.moore@mail.mcgill.ca'
 

@@ -8,10 +8,11 @@ library(tidyterra)
 ## 2. autocorrelation of suitability
 ## 3. spatial synchrony of suitability
 ## 4. change in suitability over time 
+## 5. standard deviation of suitability 
 
-#######################################
-##          analyze suitability      ##
-#######################################
+############################################
+##          analyze suitability shift     ##
+############################################
 ## make list of sdm output filenames/directories 
 sdms = list.files("/Volumes/NIKKI/sdms", full.names = T)
 
@@ -463,6 +464,14 @@ cc.test(cc$p95, cc$latitude, max.lag = 5)
 
 
 test = seewave::coh(cc$p95, cc$latitude, f = 1)
+
+
+
+
+
+
+
+
 
 
 

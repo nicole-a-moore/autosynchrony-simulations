@@ -7,11 +7,11 @@ terraOptions(threads = 1)
 source("01_simulate-range-shifts_both-edges_asymptotic.R")
 
 ## list all parameters to vary
-beta <- c(0, 1)
+beta <- c(0.5, 1.5, 2, 2.5, 3)
 p <- c(0, 1)
 icp <- c(0.1, 0.7)
 d <- c(0.1, 0.2)
-d_dist <- c(4,7)
+d_dist <- c(1,4,7)
 sigma <- c(0.2, 0.5)
 K <- c(200)
 shift_rate <- c(0.2)

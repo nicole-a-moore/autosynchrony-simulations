@@ -20,7 +20,7 @@ module load StdEnv/2020 gcc/9.3.0 udunits/2.2.28  gdal/3.5.1 r/4.2.1 netcdf/4.7.
 echo "Modules loaded."
 which R
 echo "Checking if R script exists..."
-ls -l run_one_sim_2.R
+ls -l run_one_sim_1.R
 
 echo "Running R script..."
 R CMD BATCH --no-save --no-restore run_one_sim.R 

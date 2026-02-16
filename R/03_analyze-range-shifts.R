@@ -1,5 +1,6 @@
 ## analyze range shift simulation data
 library(tidyverse)
+library(cowplot)
 select = dplyr::select
 
 
@@ -101,17 +102,17 @@ plot_shift_params <- function(all_sims,
                               icp = c(), 
                               K = c(), 
                               sigma = c(),
-                              rep = c(), param = "q95_y") {
-  p = c()
-  beta = c()
-  d = c()
-  d_dist = c()
-  shift_rate = c()
-  icp = c()
-  K = c()
-  sigma = c()
-  rep = c()
-  param = c("q5_y", "q95_y")
+                              rep = c(), param = c("q5_y", "q95_y")) {
+  # p = c()
+  # beta = c()
+  # d = c()
+  # d_dist = c()
+  # shift_rate = c()
+  # icp = c()
+  # K = c()
+  # sigma = c()
+  # rep = c()
+  # param = c("q5_y", "q95_y")
 
   if(length(p) == 0) {
     p_arg = unique(all_sims$p)
@@ -151,7 +152,7 @@ plot_shift_params <- function(all_sims,
   if(length(sigma) == 0) {
     sigma_arg = unique(all_sims$sigma)
   }else {
-    r_max_arg = r_max
+    sigma_arg = sigma
   }
   if(length(rep) == 0) {
     rep_arg = unique(all_sims$rep)
@@ -169,14 +170,38 @@ plot_shift_params <- function(all_sims,
   n_ts = max(params$t)
   
   ## plot
-  if(n_ts > 500) {
-    line = data.frame(t = 1:n_ts, Nt = c(rep(41, length.out = 500), shift_rate_arg*(1:(n_ts-500)) + 41))
+ 
+    line = data.frame(t = 1:n_ts, Nt = c(rep(41, length.out = 500), shift_rate_arg*(1:(n_ts-500)) + 20))
     
-    plot = params %>%
+    p1_d1 = params %>%
+      filter(p ==1, d_dist == 1, sigma == 0.2) %>% 
       arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
       mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-      mutate(beta = as.character(beta),
-             d_dist = as.character(d_dist),
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>%  
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp)+
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p0_d1 = params %>%
+      filter(p ==0, d_dist == 1, sigma == 0.2) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
              icp = paste("ICP = ", icp),
              p = paste("p = ", p)) %>%
       filter(parameter %in% param) %>% 
@@ -184,36 +209,286 @@ plot_shift_params <- function(all_sims,
       mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
              p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
       ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-      geom_line(aes(group = group, linetype = d_dist)) + 
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 1") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p1_d4 = params %>%
+      filter(p ==1, d_dist == 4, sigma == 0.2) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
       geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
       theme_bw() +
       #geom_smooth(method = "lm", aes(group = period)) +
       scale_x_continuous(limits = c(0, 2000)) +
       scale_y_continuous(limits = c(0, 300)) +
-      labs(x = "Time", y = "Latitude", colour = "Beta", linetype = "Dispersal\ndistance") +
-      facet_grid(p~icp~d_dist~sigma) 
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp) +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
     
-  } else {
-    plot = params %>%
+    p0_d4 = params %>%
+      filter(p ==0, d_dist == 4,  sigma == 0.2) %>%
       arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
       mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-      mutate(beta = as.character(beta),
-             d_dist = as.character(d_dist),
+      mutate(d_dist = as.character(d_dist),
              icp = paste("ICP = ", icp),
              p = paste("p = ", p)) %>%
-      filter(parameter == param) %>% 
+      filter(parameter %in% param) %>% 
       mutate(period = paste(period)) %>%
-      mutate(group = paste(beta, p, icp, K, d, d_dist, rep, sigma),
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
              p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
       ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-      geom_line(aes(group = group, linetype = d_dist)) + 
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 4") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p1_d7 = params %>%
+      filter(p ==1, d_dist == 7,  sigma == 0.2) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp) +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p0_d7 = params %>%
+      filter(p ==0, d_dist == 7,  sigma == 0.2) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 7") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2) +
+      theme(panel.grid = element_blank())
+    
+    legend = cowplot::get_legend(p1_d4)
+    empty = ggplot() +
+      theme_void()
+    
+    p1_d4 <- p1_d4 + theme(legend.position = "none")
+    
+    plot1 = plot_grid(p0_d1, p1_d1,
+              p0_d4, p1_d4,
+              p0_d7, p1_d7,
+              nrow = 3,
+              rel_widths = c(5,5))
+  
+    p1_d1 = params %>%
+      filter(p ==0, d_dist == 1, sigma == 0.2) %>% 
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>%  
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp)+
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p0_d1 = params %>%
+      filter(p ==0, d_dist == 1, sigma == 0.5) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = " ") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p1_d4 = params %>%
+      filter(p ==1, d_dist == 4, sigma == 0.5) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
       theme_bw() +
       #geom_smooth(method = "lm", aes(group = period)) +
       scale_x_continuous(limits = c(0, 2000)) +
       scale_y_continuous(limits = c(0, 300)) +
-      labs(x = "Time", y = "Latitude", colour = "Beta", colour = "Beta", linetype = "Dispersal\ndistance") +
-      facet_grid(p~icp) 
-  }
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp) +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p0_d4 = params %>%
+      filter(p ==0, d_dist == 4,  sigma == 0.5) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = " ") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p1_d7 = params %>%
+      filter(p ==1, d_dist == 7,  sigma == 0.5) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+      facet_grid(p~d~icp) +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2)+
+      theme(panel.grid = element_blank())
+    
+    p0_d7 = params %>%
+      filter(p ==0, d_dist == 7,  sigma == 0.5) %>%
+      arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+      mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+      mutate(d_dist = as.character(d_dist),
+             icp = paste("ICP = ", icp),
+             p = paste("p = ", p)) %>%
+      filter(parameter %in% param) %>% 
+      mutate(period = paste(period)) %>%
+      mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+             p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+      ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+      geom_line(aes(group = group)) + 
+      geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+      theme_bw() +
+      theme(legend.position = "none") +
+      #geom_smooth(method = "lm", aes(group = period)) +
+      scale_x_continuous(limits = c(0, 2000)) +
+      scale_y_continuous(limits = c(0, 300)) +
+      labs(x = "Time", y = "Latitude", colour = "Beta",  title = " ") +
+      facet_grid(p~d~icp)  +
+      scale_color_gradient2(low = "lightgrey", high = "brown", mid = "red", midpoint = 2) +
+      theme(panel.grid = element_blank())
+    
+    legend = cowplot::get_legend(p1_d4)
+    empty = ggplot() +
+      theme_void()
+    
+    p1_d4 <- p1_d4 + theme(legend.position = "none")
+    
+    plot2 = plot_grid(p0_d1, p1_d1,
+              p0_d4, p1_d4,
+              p0_d7, p1_d7,
+              nrow = 3,
+              rel_widths = c(5,5))
+  
+    plot_grid(empty, empty, empty, 
+              plot1, plot2, legend, nrow = 2,
+              rel_widths = c(5,5,0.2),
+              rel_heights = c(0.3, 5, 5), 
+              label_x = 0,
+              labels = c("Standard deviation = 0.2", "Standard deviation = 0.5"))
   
   return(plot)
 }
@@ -225,7 +500,8 @@ source("R/functions/plot_range.R")
 ############################################################
 ## process results from each simulation separately, measuring range edge parameters over time
 ## set up filenames
-dir = "outputs/data-processed/range-shift-simulations/cluster_both-edges/sim-results"
+
+dir = "/Volumes/NIKKI/range-shift-simulations/sim-results"
 files = list.files(dir, full.names = T)
 folders = list.files(dir)
 
@@ -255,7 +531,7 @@ while(f <= length(files)) {
   shift_data$rep = unique(as.numeric(str_split_fixed(substr(split[,11], 4, nchar(split[,11])), ".csv", 2)[,1]))
   
   ## save shift data 
-  write.csv(shift_data, paste0("outputs/data-processed/range-shift-simulations/cluster_both-edges/shift-data/shift-data_",
+  write.csv(shift_data, paste0("/Volumes/NIKKI/range-shift-simulations/shift-data/shift-data_",
                                folders[f]), row.names = F)
 
   f = f + 1
@@ -268,7 +544,7 @@ while(f <= length(files)) {
 #### PLOT SIMULATION RESULTS TOGETHER 
 
 ## read in and combine all simulation shift data
-files = list.files("outputs/data-processed/range-shift-simulations/cluster_both-edges/shift-data", full.names = T)
+files = list.files("/Volumes/NIKKI/range-shift-simulations/shift-data", full.names = T)
 
 all_sims <- c()
 for(i in 1:length(files)) {
@@ -280,16 +556,26 @@ for(i in 1:length(files)) {
 #### PLOT RANGES OVER TIME FOR SOME REPS x PARAM COMBINATIONS
 plot_shift_params(all_sims, beta = c(0,1), p = c(0,1))
 
+### plot range snapshofts over time 
+plot_range(path = "outputs/figures/range-shift-snapshots",
+           beta = 1,
+           p = 1,
+           d = 0.1,
+           d_dist = 7,
+           shift_rate = 0.2,
+           icp = 0.7,
+           K = 200,
+           sigma = 0.2,
+           rep = 1)
 
 
 
 
+line = data.frame(t = 1:n_ts, Nt = c(rep(20, length.out = 500), shift_rate_arg*(1:(n_ts-500)) + 20))
 
-
-
-
-p1 = params %>%
-  filter(p ==1) %>%
+## low standard deviation of noise 
+p1_d1 = params %>%
+  filter(p ==1, d_dist == 1, sigma == 0.2) %>% 
   arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
   mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
   mutate(beta = as.character(beta),
@@ -299,57 +585,368 @@ p1 = params %>%
   filter(parameter %in% param) %>% 
   mutate(period = paste(period)) %>%
   mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
-         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>%  
   ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-  geom_line(aes(group = group, linetype = d_dist)) + 
-  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
-  theme_bw() +
-  #geom_smooth(method = "lm", aes(group = period)) +
-  scale_x_continuous(limits = c(0, 2000)) +
-  scale_y_continuous(limits = c(0, 300)) +
-  labs(x = "Time", y = "Latitude", colour = "Beta", linetype = "Dispersal\ndistance") +
-  facet_grid(p~d~icp) +
-  scale_colour_manual(values = c("darkgrey", "red3"))
-
-p0 = params %>%
-  filter(p ==0) %>%
-  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
-  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
-  mutate(beta = as.character(beta),
-         d_dist = as.character(d_dist),
-         icp = paste("ICP = ", icp),
-         p = paste("p = ", p)) %>%
-  filter(parameter %in% param) %>% 
-  mutate(period = paste(period)) %>%
-  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
-         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
-  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
-  geom_line(aes(group = group, linetype = d_dist)) + 
+  geom_line(aes(group = group)) + 
   geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
   theme_bw() +
   theme(legend.position = "none") +
   #geom_smooth(method = "lm", aes(group = period)) +
   scale_x_continuous(limits = c(0, 2000)) +
   scale_y_continuous(limits = c(0, 300)) +
-  labs(x = "Time", y = "Latitude", colour = "Beta", linetype = "Dispersal\ndistance") +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3")) 
+
+p0_d1 = params %>%
+  filter(p ==0, d_dist == 1, sigma == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 1") +
+  facet_grid(p~d~icp)  +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p1_d4 = params %>%
+  filter(p ==1, d_dist == 4, sigma == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p0_d4 = params %>%
+  filter(p ==0, d_dist == 4,  sigma == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 4") +
+  facet_grid(p~d~icp)  +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p1_d7 = params %>%
+  filter(p ==1, d_dist == 7,  sigma == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p0_d7 = params %>%
+  filter(p ==0, d_dist == 7,  sigma == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 7") +
+  facet_grid(p~d~icp)  +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+legend = cowplot::get_legend(p1_d4)
+empty = ggplot() +
+  theme_void()
+
+p1_d4 <- p1_d4 + theme(legend.position = "none")
+
+plot_grid(p0_d1, p1_d1,empty,
+          p0_d4, p1_d4,legend,
+          p0_d7, p1_d7,empty,
+          nrow = 3,
+          rel_widths = c(5,5,1))
+
+
+
+## high standard deviation of noise 
+p1_d1_high = params %>%
+  filter(p ==1, d_dist == 1, sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3")) 
+
+p0_d1_high = params %>%
+  filter(p ==0, d_dist == 1, sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 1") +
   facet_grid(p~d~icp)  +
   scale_colour_manual(values = c("darkgrey", "red3"))
 
 
-plot_grid(p0, p1)
+p1_d4_high = params %>%
+  filter(p ==1, d_dist == 4, sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p0_d4_high = params %>%
+  filter(p ==0, d_dist == 4,  sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 4") +
+  facet_grid(p~d~icp)  +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p1_d7_high = params %>%
+  filter(p ==1, d_dist == 7,  sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta", title = " ") +
+  facet_grid(p~d~icp) +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+p0_d7_high = params %>%
+  filter(p ==0, d_dist == 7,  sigma == 0.5) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta",  title = "Dispersal distance: 7") +
+  facet_grid(p~d~icp)  +
+  scale_colour_manual(values = c("darkgrey", "red3"))
+
+legend = cowplot::get_legend(p1_d4_high)
+empty = ggplot() +
+  theme_void()
+
+p1_d4_high <- p1_d4_high + theme(legend.position = "none")
+
+plot_grid(p0_d1_high, p1_d1_high,empty,
+          p0_d4_high, p1_d4_high,legend,
+          p0_d7_high, p1_d7_high,empty,
+          nrow = 3,
+          rel_widths = c(5,5,1))
+
+p0_d7_high
+p1_d7_high
+
+params %>%
+  filter(p ==0, d_dist == 7,  sigma == 0.5, icp == 0.7, d == 0.1) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta") +
+  scale_colour_manual(values = c("darkgrey", "red3"))
 
 
+params %>%
+  filter(p == 0, d_dist == 7,  sigma == 0.2, icp == 0.7, d == 0.2) %>%
+  arrange(beta, p, icp, K, d, d_dist, rep, t) %>%
+  mutate(period = ifelse(t < 500, "stable", "shifting")) %>%
+  mutate(beta = as.character(beta),
+         d_dist = as.character(d_dist),
+         icp = paste("ICP = ", icp),
+         p = paste("p = ", p)) %>%
+  filter(parameter %in% param) %>% 
+  mutate(period = paste(period)) %>%
+  mutate(group = paste(param, beta, p, icp, K, d, d_dist, rep, sigma, shift_rate),
+         p_beta = paste0("p = ", p, ", beta = ", beta)) %>% 
+  ggplot(aes(x = t, y = measurement, colour = beta, group = group)) +
+  geom_line(aes(group = group)) + 
+  geom_line(data = line, inherit.aes = F, aes(x = t, y = Nt, group = shift_rate)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #geom_smooth(method = "lm", aes(group = period)) +
+  scale_x_continuous(limits = c(0, 2000)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  labs(x = "Time", y = "Latitude", colour = "Beta") +
+  scale_colour_manual(values = c("darkgrey", "red3"))
 
 
-## NEXT: 
-## add back trailing edge?
+## NEXT:
 ## measure and plot r edge over time 
 
+plot_range()
 
 
 
-
-
+## 
 
 
 

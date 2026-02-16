@@ -3,7 +3,7 @@ library(magick)
 library(magrittr)
 library(tidyverse)
 
-dir = "outputs/figures/range-shifts"
+dir = "outputs/figures/range-shift-snapshots"
 
 folders = list.files(dir, full.names = T)[which(str_detect(list.files(dir), "rep"))]
 folders = folders[which(!str_detect(folders, "gif"))]

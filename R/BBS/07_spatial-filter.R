@@ -514,6 +514,54 @@ while(sp <= length(unique(bbs$AOU))) {
   print(paste0("On species number: ", sp))
 }
 
+
+## plot one for committee meeting document 
+
+spread = spread(bbs_filtered, key = type, value = Latitude_of_edge)  %>%
+  select(Longitude_bin, xmax, xmin, sample_edge, presence_edge) %>% 
+  st_drop_geometry() %>%
+  distinct()
+
+temp =  bbs_filtered %>%
+  group_by(Route, route, RouteName) %>%
+  mutate(TotalAbd_max = max(TotalAbd)) %>%
+  ungroup() %>%
+  filter(TotalAbd != 0) %>%
+  select(-TotalAbd) %>%
+  distinct() 
+
+example = bbs_filtered %>%
+  ggplot(aes()) +
+  geom_sf(inherit.aes = FALSE, data = countries) +
+  geom_sf(data = lakes, mapping = aes(geometry = geometry), color = "black",
+          fill = "white") +
+  ## all routes
+  #geom_sf(size = 0.5, colour = "darkgrey", alpha = 0.8, stroke = 0.1, shape = 4) +
+  ## absences in areas being used for analysis
+  geom_sf(size = 0.5, data = filter(bbs_all), inherit.aes = FALSE,
+          stroke = 0.1, shape = 4, colour = "grey80") +
+  geom_sf(size = 0.5, data = filter(bbs_filtered, TotalAbd == 0), inherit.aes = FALSE,
+          stroke = 0.1, shape = 4, colour = "grey50") +
+  scale_colour_viridis_c(trans = "log", breaks = c(1, 5, 50, 500)) +
+  scale_x_continuous(limits = c(-165,-48.5)) +
+  scale_y_continuous(limits = c(25,70)) +
+  labs(colour = "Total\nabundance", x = "Longitude", y = "Latitude") +
+  ## presences in areas being used for analysis
+  geom_sf(size = 0.1, data = filter(temp), inherit.aes = FALSE,
+          aes(colour = TotalAbd_max)) +
+  geom_segment(data = spread, inherit.aes = F,
+               aes(x = xmax, y = 60, yend = 25), colour = "black") +
+  geom_segment(data = spread, inherit.aes = F,
+               aes(x = xmin, y = 60, yend = 25), colour = "black") +
+  theme(panel.grid = element_blank())
+
+ggsave(example, path = "outputs/figures",
+       filename = "example-for-committee-meeting.png", width = 6, height = 3)
+
+
+
+
+
 ## next improvements/steps:
 ## - find a way to split species ranges into longitudinal chunks in a way that makes sense for each distribution
 ## - for longitudinal chunks that have discontinuous bits of the range inside, get rid of more southernly part

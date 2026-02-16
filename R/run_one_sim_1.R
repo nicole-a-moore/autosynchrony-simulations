@@ -26,7 +26,7 @@ sims = expand.grid(beta = beta,
                    K = K,
                    shift_rate = shift_rate)
 
-sims = sims[121:240,]
+sims = sims[1:120,]
 
 ## pick this job's row
 task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID"))
